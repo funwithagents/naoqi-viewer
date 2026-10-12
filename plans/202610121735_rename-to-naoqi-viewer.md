@@ -1,6 +1,6 @@
 # Rename to naoqi-viewer
 
-**Status:** In progress
+**Status:** Done
 
 The toolkit's packages become `naoqi-*` (cross-repository analysis: `nao-sim/analysis/naoqi-rename.md`). This plan renames nao-viewer to naoqi-viewer everywhere a name comes from the package: repository, distribution, import package, CLI, `NaoViewer*` classes, `NAO_VIEWER_*` variables, user data directory, the specs and docs; it follows naoqi-sim's renamed contract (the `NaoqiSim` service, `NaoqiSim/*` keys, target id `"naoqi-sim"`) and pins the republished naoqi-meshes `r1`. It changes no behavior and adds no compatibility alias.
 
@@ -65,3 +65,7 @@ Spec statuses: the spec edits land in the same change as the code, so every `Imp
 - CI green on commit B, both jobs, including the live tier against naoqi-sim's 2.1 (the target reported as `naoqi-sim`, version `2.1.4.13`).
 
 Mark this plan `Done` here and in [_index.md](_index.md) once commit B is merged and CI is green.
+
+## Outcome
+
+Done Oct 12, 2026: commit A `917a782` (the rename, the republished naoqi-meshes `r1` pinned at `905c12ef…`), commit B `e51adc4` (`NAOQI_SIM_REF` = naoqi-sim `8ca438d`); CI green on every job, including both live jobs and `meshes`. Merged fast-forward. The moves of the working folder and the Claude project folder are in `../naoqi-migrate.sh`, run once every session is closed. naoqi-meshes republished `r1` instead of publishing `r2`, so `RELEASE` stays `"r1"`.
