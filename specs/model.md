@@ -1,8 +1,8 @@
 ---
 code:
-  - src/nao_viewer/model.py
-  - src/nao_viewer/models/nao.xml
-  - src/nao_viewer/scenes/empty.xml
+  - src/naoqi_viewer/model.py
+  - src/naoqi_viewer/models/nao.xml
+  - src/naoqi_viewer/scenes/empty.xml
   - third_party/nao_description/nao.urdf
 tests:
   - tests/test_model.py
@@ -14,13 +14,13 @@ tests:
 
 ## Purpose
 
-The NAO as a MuJoCo model, and the one place that turns a NAOqi pose into MuJoCo state. Every other part of nao-viewer (the viewer, check-model) loads the robot and poses it through this module. The committed model draws the robot with styled placeholder shapes of our own, so it ships under MIT. When the user has installed Aldebaran's meshes ([meshes.md](meshes.md)), the same model is loaded with those meshes in place of the placeholder shapes.
+The NAO as a MuJoCo model, and the one place that turns a NAOqi pose into MuJoCo state. Every other part of naoqi-viewer (the viewer, check-model) loads the robot and poses it through this module. The committed model draws the robot with styled placeholder shapes of our own, so it ships under MIT. When the user has installed Aldebaran's meshes ([meshes.md](meshes.md)), the same model is loaded with those meshes in place of the placeholder shapes.
 
 ## Decided
 
 ### One committed model, maintained by hand
 
-- `src/nao_viewer/models/nao.xml` is the NAO model. It sits inside the package so it ships in the wheel. The NAO doesn't change, so there is no build tool: the file is the source of truth and is edited by hand (for example, when `check-model` finds a wrong effector offset).
+- `src/naoqi_viewer/models/nao.xml` is the NAO model. It sits inside the package so it ships in the wheel. The NAO doesn't change, so there is no build tool: the file is the source of truth and is edited by hand (for example, when `check-model` finds a wrong effector offset).
 - **Origin**: it is converted once from the NAO V5 (H25) URDF of [ros-naoqi/nao_robot](https://github.com/ros-naoqi/nao_robot) (BSD-3-Clause), file `nao_description/urdf/naoV50_generated_urdf/nao.urdf` (already expanded from xacro) at commit `67476469a1371b00b17538eb6ea336367ece7d44`, during the model's implementation plan. That conversion (MuJoCo's URDF importer plus manual edits) is a one-off step of the plan, not code kept in the repository.
 - **Provenance**: the URDF stays vendored at `third_party/nao_description/nao.urdf`, with its `LICENSE` next to it and a `SOURCE` file recording the upstream repository, commit and path. `THIRD_PARTY_NOTICES.md` carries the copyright notice. Nothing reads the URDF at runtime. Tests use it as a reference (see Tests below).
 - The URDF provides the kinematics (link frames, joint axes, limits), masses and inertias. Its `<visual>` and `<collision>` mesh references (`package://nao_meshes/...`) are not used in `nao.xml`. Their file names and origins feed the Aldebaran visual table in [meshes.md](meshes.md).
@@ -33,7 +33,7 @@ The NAO as a MuJoCo model, and the one place that turns a NAOqi pose into MuJoCo
   `model.JOINT_NAMES` exposes this tuple.
 - **Frames**: the URDF's massless fixed-joint links (cameras, effectors, sole frames) are not bodies in `nao.xml`; their poses become sites and cameras on the parent body. (MuJoCo's URDF importer merges static bodies by default, so the conversion must keep these frames, for example with `fusestatic="false"` or by reading them from the URDF directly.)
 - **Hands**: `LHand` and `RHand` are joints with range `[0, 1]` (NAOqi's open fraction). The URDF finger joints are kept and follow the hand joint through its `mimic` multiplier and offset. In the URDF, `LHand` rotates the `l_gripper` frame itself, which NAOqi's arm effector doesn't do, so nothing but that dummy frame hangs off the hand joint: the effector sites sit on the wrist body (see Effector sites).
-- **Couplings**: `LHipYawPitch`/`RHipYawPitch` (one motor) and the finger mimics are joint equality constraints in the model, for any future physics use. Since nao-viewer never steps physics, constraints are not enforced at render time. `PoseWriter` applies the finger couplings itself (see below). `RHipYawPitch` is taken as reported by NAOqi.
+- **Couplings**: `LHipYawPitch`/`RHipYawPitch` (one motor) and the finger mimics are joint equality constraints in the model, for any future physics use. Since naoqi-viewer never steps physics, constraints are not enforced at render time. `PoseWriter` applies the finger couplings itself (see below). `RHipYawPitch` is taken as reported by NAOqi.
 - **Collision geoms**: hand-tuned primitives: capsules for limbs, boxes for feet and torso, a sphere-capped capsule for the head. They sit in geom group 3, hidden by default, with contacts between adjacent bodies excluded. They are the same whichever visuals are loaded.
 - **Visual geoms**: see Placeholder visuals below. Every visual geom is visual-only (`contype=conaffinity=0`) and in group 1.
 - **Actuators**: one `position` actuator per joint, named after the joint, all in a default class `nao_joint` that holds `kp`, `forcerange` and `damping` as named parameters. The values are placeholders until system identification, and they are unused by the viewer.
@@ -68,7 +68,7 @@ Kinematics, joints, sensors, cameras and collision geoms are therefore identical
 
 ### Scenes
 
-The model holds the robot only. A scene is an MJCF file with the world around it (floor, lights, objects). `load_world(scene, variant)` attaches the robot into the scene with `MjSpec.attach`, so any scene works with either variant. Scenes ship in `src/nao_viewer/scenes/`. `empty.xml` (checker floor, one light) is the default; the other bundled scenes are listed in [api.md](api.md). `load_world` takes a bundled scene name or a path to a user file.
+The model holds the robot only. A scene is an MJCF file with the world around it (floor, lights, objects). `load_world(scene, variant)` attaches the robot into the scene with `MjSpec.attach`, so any scene works with either variant. Scenes ship in `src/naoqi_viewer/scenes/`. `empty.xml` (checker floor, one light) is the default; the other bundled scenes are listed in [api.md](api.md). `load_world` takes a bundled scene name or a path to a user file.
 
 ### Runtime API (`model.py`)
 
@@ -93,7 +93,7 @@ class PoseWriter:
     def apply(self, data: mujoco.MjData, pose: NaoPose) -> None     # writes qpos, finger couplings, runs mj_kinematics + mj_camlight
 ```
 
-- `resolve_variant("auto")` returns `"aldebaran"` when [meshes.md](meshes.md) reports an installed, accepted mesh set, and `"placeholder"` otherwise. Asking for `"aldebaran"` when the meshes are missing raises an error that names `nao-viewer fetch-meshes`.
+- `resolve_variant("auto")` returns `"aldebaran"` when [meshes.md](meshes.md) reports an installed, accepted mesh set, and `"placeholder"` otherwise. Asking for `"aldebaran"` when the meshes are missing raises an error that names `naoqi-viewer fetch-meshes`.
 - `load_world` loads `nao.xml` as an `MjSpec`. For `"aldebaran"` it swaps the visuals ([meshes.md](meshes.md)), then attaches the robot into the scene and compiles. `name`, when given, becomes the compiled model's name, which MuJoCo's viewer shows as its window title ([viewer.md](viewer.md)).
 - `PoseWriter.apply` runs `mj_camlight` after `mj_kinematics`, because `mj_kinematics` doesn't pose the cameras and the head-camera renders need them.
 - `PoseWriter.apply` ignores names the model doesn't know (logged once) and leaves joints missing from the pose unchanged. Values outside a joint's range are written as given: the viewer shows what NAOqi reports.

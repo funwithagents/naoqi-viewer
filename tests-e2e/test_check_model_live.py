@@ -3,7 +3,7 @@
 import pytest
 from support import require_env
 
-from nao_viewer import check_model
+from naoqi_viewer import check_model
 
 
 def test_the_model_matches_naoqis_kinematics():

@@ -8,8 +8,8 @@ from collections.abc import Callable
 import mujoco
 import numpy as np
 
-from nao_viewer.model import PoseWriter
-from nao_viewer.source import PoseSource, Sample
+from naoqi_viewer.model import PoseWriter
+from naoqi_viewer.source import PoseSource, Sample
 
 STALE_AFTER = 0.5  # s of data age before the overlay reads STALE
 FRAME_PERIOD = 1.0 / 60

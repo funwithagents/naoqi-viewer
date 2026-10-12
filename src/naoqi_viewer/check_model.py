@@ -8,8 +8,8 @@ from dataclasses import dataclass
 import mujoco
 import numpy as np
 
-from nao_viewer.model import JOINT_NAMES, NaoPose, PoseWriter, load_world
-from nao_viewer.source import Target, connect, identify, normalize_url
+from naoqi_viewer.model import JOINT_NAMES, NaoPose, PoseWriter, load_world
+from naoqi_viewer.source import Target, connect, identify, normalize_url
 
 _log = logging.getLogger(__name__)
 

@@ -9,8 +9,8 @@ import pytest
 from mesh_archive import install_fake_release
 from mock_naoqi import MockNaoqi
 
-from nao_viewer import client, meshes
-from nao_viewer.cli import main
+from naoqi_viewer import client, meshes
+from naoqi_viewer.cli import main
 
 FAKE_VIEWER = Path(__file__).with_name("fake_viewer_process.py")
 
@@ -34,7 +34,7 @@ def fake_viewer_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path
         lambda config: [sys.executable, str(FAKE_VIEWER), json.dumps(config.to_dict())],
     )
     received = tmp_path / "received.json"
-    monkeypatch.setenv("NAO_FAKE_VIEWER_CONFIG", str(received))
+    monkeypatch.setenv("NAOQI_FAKE_VIEWER_CONFIG", str(received))
     return received
 
 
@@ -72,7 +72,7 @@ def test_check_model_refuses_a_real_robot(capsys: pytest.CaptureFixture[str]):
         assert main(["check-model", mock.url, "--samples", "1"]) == 1
         assert mock.calls_to("angleInterpolation") == []
         err = capsys.readouterr().err
-        assert err.startswith("nao-viewer: error: ")
+        assert err.startswith("naoqi-viewer: error: ")
         assert "--allow-real" in err
         assert main(["check-model", mock.url, "--samples", "1", "--allow-real"]) == 0
     finally:
@@ -101,7 +101,7 @@ def test_view_launches_the_config_and_returns_when_the_window_closes(
     tmp_path: Path, fake_viewer_process: Path, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.setenv(
-        "NAO_FAKE_VIEWER", "close-after-1"
+        "NAOQI_FAKE_VIEWER", "close-after-1"
     )  # hello, then the window closes
     config = tmp_path / "viewer.json"
     config.write_text(
@@ -121,7 +121,7 @@ def test_view_launches_the_config_and_returns_when_the_window_closes(
 def test_view_without_a_config_opens_the_default(
     fake_viewer_process: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    monkeypatch.setenv("NAO_FAKE_VIEWER", "close-after-1")
+    monkeypatch.setenv("NAOQI_FAKE_VIEWER", "close-after-1")
     assert main(["view"]) == 0
     received = json.loads(fake_viewer_process.read_text())
     assert (received["mode"], received["naoqi"]["url"], received["world"]["scene"]) == (
@@ -146,26 +146,26 @@ def test_view_reports_a_launch_failure(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ):
-    monkeypatch.setenv("NAO_FAKE_VIEWER", "error")
+    monkeypatch.setenv("NAOQI_FAKE_VIEWER", "error")
     assert main(["view"]) == 1
-    assert "nao-viewer: error: unknown scene 'nope'" in capsys.readouterr().err
+    assert "naoqi-viewer: error: unknown scene 'nope'" in capsys.readouterr().err
 
 
 def test_view_closes_the_viewer_on_ctrl_c(
     fake_viewer_process: Path, monkeypatch: pytest.MonkeyPatch
 ):
     closed: list[bool] = []
-    real_close = client.NaoViewer.close
+    real_close = client.NaoqiViewer.close
 
-    def interrupt(self: client.NaoViewer, timeout: float | None = None) -> bool:
+    def interrupt(self: client.NaoqiViewer, timeout: float | None = None) -> bool:
         raise KeyboardInterrupt
 
-    def close(self: client.NaoViewer) -> None:
+    def close(self: client.NaoqiViewer) -> None:
         closed.append(self.running)
         real_close(self)
 
-    monkeypatch.setattr(client.NaoViewer, "wait", interrupt)
-    monkeypatch.setattr(client.NaoViewer, "close", close)
+    monkeypatch.setattr(client.NaoqiViewer, "wait", interrupt)
+    monkeypatch.setattr(client.NaoqiViewer, "close", close)
     assert main(["view"]) == 130
     assert closed[-1] is True  # the viewer was still up and got closed
 
@@ -178,7 +178,7 @@ def test_logs_go_to_stderr_at_info_by_default(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ):
-    monkeypatch.setenv("NAO_FAKE_VIEWER", "close-after-1")
+    monkeypatch.setenv("NAOQI_FAKE_VIEWER", "close-after-1")
     assert main(["view"]) == 0
     err = capsys.readouterr().err
     assert "connected to the fake NAOqi" in err  # INFO, from the viewer process
@@ -190,7 +190,7 @@ def test_quiet_keeps_warnings_only(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ):
-    monkeypatch.setenv("NAO_FAKE_VIEWER", "close-after-1")
+    monkeypatch.setenv("NAOQI_FAKE_VIEWER", "close-after-1")
     assert main(["-q", "view"]) == 0
     err = capsys.readouterr().err
     assert "connected to the fake NAOqi" not in err
@@ -204,7 +204,7 @@ def test_verbose_adds_debug_messages(
     assert main(["check-model", url, "--samples", "2", "--seed", "3"]) == 0
     assert "sample 2/2 done" not in capsys.readouterr().err
     assert main(["-v", "check-model", url, "--samples", "2", "--seed", "3"]) == 0
-    assert "DEBUG nao_viewer.check_model: sample 2/2 done" in capsys.readouterr().err
+    assert "DEBUG naoqi_viewer.check_model: sample 2/2 done" in capsys.readouterr().err
 
 
 # --- fetch-meshes ----------------------------------------------------------------------
@@ -218,7 +218,8 @@ def test_fetch_meshes_refuses_a_piped_stdin(
     assert main(["fetch-meshes"]) == 1
     captured = capsys.readouterr()
     assert (
-        "nao-viewer: error: fetch-meshes needs an interactive terminal" in captured.err
+        "naoqi-viewer: error: fetch-meshes needs an interactive terminal"
+        in captured.err
     )
     assert meshes.installed() is None
 

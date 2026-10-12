@@ -9,12 +9,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from nao_viewer import (
+from naoqi_viewer import (
     LaunchError,
     ModeError,
     NaoqiSettings,
-    NaoViewer,
-    NaoViewerConfig,
+    NaoqiViewer,
+    NaoqiViewerConfig,
     ViewerClosed,
     ViewerStatus,
     WorldSettings,
@@ -23,8 +23,8 @@ from nao_viewer import (
 
 FAKE_VIEWER = Path(__file__).with_name("fake_viewer_process.py")
 URL = "tcp://127.0.0.1:9559"
-SIM = NaoViewerConfig(mode="sim", naoqi=NaoqiSettings(url=URL))
-MIRROR = NaoViewerConfig(mode="mirror", naoqi=NaoqiSettings(url=URL))
+SIM = NaoqiViewerConfig(mode="sim", naoqi=NaoqiSettings(url=URL))
+MIRROR = NaoqiViewerConfig(mode="mirror", naoqi=NaoqiSettings(url=URL))
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +40,7 @@ def fake_viewer_process(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def ops_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "ops.txt"
-    monkeypatch.setenv("NAO_FAKE_VIEWER_OPS", str(path))
+    monkeypatch.setenv("NAOQI_FAKE_VIEWER_OPS", str(path))
     return path
 
 
@@ -49,11 +49,11 @@ def received_ops(path: Path) -> list[str]:
 
 
 def test_launch_handshake_and_status(ops_file: Path):
-    with NaoViewer(SIM) as viewer:
+    with NaoqiViewer(SIM) as viewer:
         assert viewer.running
         assert viewer.status() == ViewerStatus(
             mode="sim",
-            target="nao-sim",
+            target="naoqi-sim",
             naoqi_version="0.3.0",
             url=URL,
             variant="placeholder",
@@ -69,22 +69,22 @@ def test_the_config_reaches_the_viewer_process_intact(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     received = tmp_path / "config.json"
-    monkeypatch.setenv("NAO_FAKE_VIEWER_CONFIG", str(received))
-    config = NaoViewerConfig(
+    monkeypatch.setenv("NAOQI_FAKE_VIEWER_CONFIG", str(received))
+    config = NaoqiViewerConfig(
         mode="sim",
         naoqi=NaoqiSettings(url="tcp://10.0.0.7:9600", rate_hz=30),
         world=WorldSettings(scene="table", variant="placeholder"),
         ghost=True,
         launch_timeout_s=12,
     )
-    with NaoViewer(config):
+    with NaoqiViewer(config):
         pass
-    assert NaoViewerConfig.from_dict(json.loads(received.read_text())) == config
+    assert NaoqiViewerConfig.from_dict(json.loads(received.read_text())) == config
 
 
 def test_building_a_viewer_starts_nothing(ops_file: Path):
-    viewer = NaoViewer.from_dict({"mode": "sim"})
-    assert viewer.config == NaoViewerConfig(mode="sim")
+    viewer = NaoqiViewer.from_dict({"mode": "sim"})
+    assert viewer.config == NaoqiViewerConfig(mode="sim")
     assert not viewer.running
     assert viewer.wait(timeout=0) is True
     with pytest.raises(ViewerClosed, match="launch"):
@@ -99,14 +99,14 @@ def test_constructors_from_json_and_file(tmp_path: Path):
     text = '{"mode": "sim", "naoqi": {"url": "nao.local"}}'
     path = tmp_path / "viewer.json"
     path.write_text(text)
-    expected = NaoViewerConfig(mode="sim", naoqi=NaoqiSettings(url="nao.local"))
-    assert NaoViewer.from_json(text).config == expected
-    assert NaoViewer.from_json_file(path).config == expected
-    assert NaoViewer().config == NaoViewerConfig()
+    expected = NaoqiViewerConfig(mode="sim", naoqi=NaoqiSettings(url="nao.local"))
+    assert NaoqiViewer.from_json(text).config == expected
+    assert NaoqiViewer.from_json_file(path).config == expected
+    assert NaoqiViewer().config == NaoqiViewerConfig()
 
 
 def test_camera_frame_returns_the_rendered_image():
-    with NaoViewer(SIM) as viewer:
+    with NaoqiViewer(SIM) as viewer:
         frame = viewer.camera_frame("bottom", 320, 240)
         assert frame.image.shape == (240, 320, 3) and frame.image.dtype == np.uint8
         assert (frame.camera, frame.pose_seq, frame.pose_age) == ("bottom", 12, 0.02)
@@ -117,18 +117,18 @@ def test_camera_frame_returns_the_rendered_image():
 
 
 def test_camera_frame_in_mirror_mode_raises_without_a_round_trip(ops_file: Path):
-    with NaoViewer(MIRROR) as viewer, pytest.raises(ModeError):
+    with NaoqiViewer(MIRROR) as viewer, pytest.raises(ModeError):
         viewer.camera_frame("top", 640, 480)
     assert "camera_frame" not in received_ops(ops_file)
 
 
 def test_camera_frame_rejects_an_unknown_camera():
-    with NaoViewer(SIM) as viewer, pytest.raises(ValueError, match="left"):
+    with NaoqiViewer(SIM) as viewer, pytest.raises(ValueError, match="left"):
         viewer.camera_frame("left", 640, 480)  # type: ignore[arg-type]
 
 
 def test_launching_twice_is_an_error_but_relaunching_after_close_works():
-    viewer = NaoViewer(SIM)
+    viewer = NaoqiViewer(SIM)
     viewer.launch()
     try:
         with pytest.raises(RuntimeError, match="already running"):
@@ -144,9 +144,9 @@ def test_launching_twice_is_an_error_but_relaunching_after_close_works():
 
 def test_launch_again_after_the_window_was_closed(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv(
-        "NAO_FAKE_VIEWER", "close-after-2"
+        "NAOQI_FAKE_VIEWER", "close-after-2"
     )  # hello, status, then the window closes
-    viewer = NaoViewer(SIM)
+    viewer = NaoqiViewer(SIM)
     viewer.launch()
     viewer.status()
     assert viewer.wait(timeout=5)
@@ -159,8 +159,8 @@ def test_launch_again_after_the_window_was_closed(monkeypatch: pytest.MonkeyPatc
 
 
 def test_launch_error_from_the_viewer_process(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("NAO_FAKE_VIEWER", "error")
-    viewer = NaoViewer(SIM)
+    monkeypatch.setenv("NAOQI_FAKE_VIEWER", "error")
+    viewer = NaoqiViewer(SIM)
     with pytest.raises(LaunchError, match="unknown scene 'nope'") as raised:
         viewer.launch()
     assert "loading the scene" in str(raised.value)  # the stderr tail comes along
@@ -170,14 +170,14 @@ def test_launch_error_from_the_viewer_process(monkeypatch: pytest.MonkeyPatch):
 def test_launch_error_when_the_viewer_process_exits_early(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setenv("NAO_FAKE_VIEWER", "crash")
+    monkeypatch.setenv("NAOQI_FAKE_VIEWER", "crash")
     with pytest.raises(LaunchError, match="exited \\(code 3\\)") as raised:
-        NaoViewer(SIM).launch()
+        NaoqiViewer(SIM).launch()
     assert "GLFW could not open a window" in str(raised.value)
 
 
 def test_launch_times_out_and_stops_the_viewer_process(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("NAO_FAKE_VIEWER", "hang")
+    monkeypatch.setenv("NAOQI_FAKE_VIEWER", "hang")
     processes: list[subprocess.Popen[str]] = []
     real_popen = subprocess.Popen
 
@@ -189,23 +189,23 @@ def test_launch_times_out_and_stops_the_viewer_process(monkeypatch: pytest.Monke
     monkeypatch.setattr(subprocess, "Popen", recording_popen)
     started = time.monotonic()
     with pytest.raises(LaunchError, match="wasn't ready within 1 s") as raised:
-        NaoViewer(NaoViewerConfig(launch_timeout_s=1)).launch()
+        NaoqiViewer(NaoqiViewerConfig(launch_timeout_s=1)).launch()
     assert time.monotonic() - started < 5
     assert "never ready" in str(raised.value)
     assert processes[0].poll() is not None  # not left running
 
 
 def test_protocol_mismatch_is_a_launch_error(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("NAO_FAKE_VIEWER_PROTOCOL", "2")
+    monkeypatch.setenv("NAOQI_FAKE_VIEWER_PROTOCOL", "2")
     with pytest.raises(LaunchError, match="protocol 2"):
-        NaoViewer(SIM).launch()
+        NaoqiViewer(SIM).launch()
 
 
 def test_calls_after_the_viewer_exits_raise_viewer_closed(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setenv("NAO_FAKE_VIEWER", "close-after-2")
-    viewer = NaoViewer(SIM)
+    monkeypatch.setenv("NAOQI_FAKE_VIEWER", "close-after-2")
+    viewer = NaoqiViewer(SIM)
     viewer.launch()
     viewer.status()
     assert viewer.wait(timeout=5)
@@ -218,12 +218,12 @@ def test_calls_after_the_viewer_exits_raise_viewer_closed(
 
 
 def test_wait_times_out_while_the_viewer_runs():
-    with NaoViewer(MIRROR) as viewer:
+    with NaoqiViewer(MIRROR) as viewer:
         assert viewer.wait(timeout=0.1) is False
 
 
 def test_calls_after_close_raise_viewer_closed():
-    viewer = NaoViewer(MIRROR)
+    viewer = NaoqiViewer(MIRROR)
     viewer.launch()
     viewer.close()
     assert not viewer.running
@@ -234,8 +234,8 @@ def test_calls_after_close_raise_viewer_closed():
 def test_viewer_process_logs_reach_the_callers_logging(
     caplog: pytest.LogCaptureFixture,
 ):
-    with caplog.at_level(logging.DEBUG, logger="nao_viewer.viewer_process"):
-        with NaoViewer(MIRROR) as viewer:
+    with caplog.at_level(logging.DEBUG, logger="naoqi_viewer.viewer_process"):
+        with NaoqiViewer(MIRROR) as viewer:
             viewer.status()
         deadline = time.monotonic() + 2
         while time.monotonic() < deadline and not any(
@@ -245,11 +245,11 @@ def test_viewer_process_logs_reach_the_callers_logging(
     records = {
         r.getMessage(): r.levelno
         for r in caplog.records
-        if r.name == "nao_viewer.viewer_process"
+        if r.name == "naoqi_viewer.viewer_process"
     }
-    assert records["nao_viewer.source: connected to the fake NAOqi"] == logging.INFO
+    assert records["naoqi_viewer.source: connected to the fake NAOqi"] == logging.INFO
     assert (
-        records["nao_viewer.viewer: a warning from the viewer process"]
+        records["naoqi_viewer.viewer: a warning from the viewer process"]
         == logging.WARNING
     )
     native = [message for message in records if "native log line" in message]
@@ -261,7 +261,7 @@ def test_viewer_process_logs_reach_the_callers_logging(
 
 
 def test_concurrent_calls_get_their_own_answers():
-    with NaoViewer(SIM) as viewer:
+    with NaoqiViewer(SIM) as viewer:
         sizes = [(32 + i, 24 + i) for i in range(8)]
         results: dict[int, tuple[int, ...]] = {}
 
@@ -287,10 +287,10 @@ def test_missing_mjpython_on_macos_is_a_launch_error(
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(sys, "executable", str(tmp_path / "python"))
     with pytest.raises(LaunchError, match="mjpython"):
-        NaoViewer(MIRROR).launch()
+        NaoqiViewer(MIRROR).launch()
 
 
-HEADLESS = NaoViewerConfig(mode="sim", headless=True, naoqi=NaoqiSettings(url=URL))
+HEADLESS = NaoqiViewerConfig(mode="sim", headless=True, naoqi=NaoqiSettings(url=URL))
 
 
 def test_a_headless_viewer_needs_no_mjpython_on_macos(
@@ -302,8 +302,12 @@ def test_a_headless_viewer_needs_no_mjpython_on_macos(
         sys, "executable", str(tmp_path / "python")
     )  # no mjpython beside it
     command = client._viewer_command(HEADLESS)
-    assert command[:3] == [str(tmp_path / "python"), "-m", "nao_viewer.viewer_process"]
-    assert NaoViewerConfig.from_json(command[3]) == HEADLESS
+    assert command[:3] == [
+        str(tmp_path / "python"),
+        "-m",
+        "naoqi_viewer.viewer_process",
+    ]
+    assert NaoqiViewerConfig.from_json(command[3]) == HEADLESS
 
 
 def test_a_headless_viewer_on_linux_renders_through_egl_by_default(
@@ -332,8 +336,8 @@ def test_macos_keeps_mujocos_own_offscreen_backend(monkeypatch: pytest.MonkeyPat
     assert client._viewer_env(HEADLESS) is None
 
 
-def test_importing_nao_viewer_loads_neither_mujoco_nor_qi():
-    code = "import sys, nao_viewer; print(sorted(m for m in ('mujoco', 'qi') if m in sys.modules))"
+def test_importing_naoqi_viewer_loads_neither_mujoco_nor_qi():
+    code = "import sys, naoqi_viewer; print(sorted(m for m in ('mujoco', 'qi') if m in sys.modules))"
     result = subprocess.run(
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     )

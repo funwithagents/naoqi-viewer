@@ -6,20 +6,20 @@ from typing import Any
 
 import pytest
 
-from nao_viewer import ConfigError, NaoqiSettings, NaoViewerConfig, WorldSettings
+from naoqi_viewer import ConfigError, NaoqiSettings, NaoqiViewerConfig, WorldSettings
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples" / "configs"
 
 
 def config_error(data: Any) -> ConfigError:
     with pytest.raises(ConfigError) as raised:
-        NaoViewerConfig.from_dict(data)
+        NaoqiViewerConfig.from_dict(data)
     return raised.value
 
 
 def test_defaults():
-    config = NaoViewerConfig()
-    assert NaoViewerConfig.from_dict({}) == config
+    config = NaoqiViewerConfig()
+    assert NaoqiViewerConfig.from_dict({}) == config
     assert (config.mode, config.headless, config.naoqi.url, config.naoqi.rate_hz) == (
         "mirror",
         False,
@@ -40,7 +40,7 @@ def test_defaults():
 
 
 def test_a_partial_block_keeps_the_other_defaults():
-    config = NaoViewerConfig.from_dict(
+    config = NaoqiViewerConfig.from_dict(
         {"naoqi": {"url": "nao.local"}, "world": {"scene": "table"}}
     )
     assert config.naoqi == NaoqiSettings(url="nao.local", rate_hz=50.0)
@@ -49,7 +49,7 @@ def test_a_partial_block_keeps_the_other_defaults():
 
 
 def test_to_dict_round_trips_and_is_json():
-    config = NaoViewerConfig(
+    config = NaoqiViewerConfig(
         mode="sim",
         naoqi=NaoqiSettings(url="tcp://10.0.0.7:9600", rate_hz=30),
         world=WorldSettings(scene="table", variant="placeholder"),
@@ -65,9 +65,9 @@ def test_to_dict_round_trips_and_is_json():
         "ghost": True,
         "launch_timeout_s": 12,
     }
-    assert NaoViewerConfig.from_json(json.dumps(data)) == config
-    headless = NaoViewerConfig(mode="sim", headless=True)
-    assert NaoViewerConfig.from_dict(headless.to_dict()) == headless
+    assert NaoqiViewerConfig.from_json(json.dumps(data)) == config
+    headless = NaoqiViewerConfig(mode="sim", headless=True)
+    assert NaoqiViewerConfig.from_dict(headless.to_dict()) == headless
 
 
 @pytest.mark.parametrize(
@@ -116,7 +116,7 @@ def test_an_unknown_bundled_scene_lists_the_bundled_ones():
 
 
 def test_a_scene_path_is_not_checked_at_load():
-    config = NaoViewerConfig.from_dict({"world": {"scene": "/not/yet/written.xml"}})
+    config = NaoqiViewerConfig.from_dict({"world": {"scene": "/not/yet/written.xml"}})
     assert config.world.scene == "/not/yet/written.xml"
 
 
@@ -126,9 +126,9 @@ def test_relative_scene_paths_in_a_file_resolve_against_the_files_directory(
     folder = tmp_path / "setup"
     folder.mkdir()
     (folder / "viewer.json").write_text('{"world": {"scene": "scenes/lab.xml"}}')
-    config = NaoViewerConfig.from_json_file(folder / "viewer.json")
+    config = NaoqiViewerConfig.from_json_file(folder / "viewer.json")
     assert config.world.scene == str(folder / "scenes" / "lab.xml")
-    absolute = NaoViewerConfig.from_dict({"world": {"scene": "/abs/lab.xml"}})
+    absolute = NaoqiViewerConfig.from_dict({"world": {"scene": "/abs/lab.xml"}})
     assert absolute.world.scene == "/abs/lab.xml"
 
 
@@ -138,25 +138,25 @@ def test_direct_construction_validates_too():
     with pytest.raises(ConfigError, match="kitchen"):
         WorldSettings(scene="kitchen")
     with pytest.raises(ConfigError, match="mode"):
-        NaoViewerConfig(mode="replay")  # type: ignore[arg-type]
+        NaoqiViewerConfig(mode="replay")  # type: ignore[arg-type]
 
 
 def test_invalid_json_and_unreadable_files_name_the_file(tmp_path: Path):
     broken = tmp_path / "broken.json"
     broken.write_text("{mode: sim}")
     with pytest.raises(ConfigError, match="broken.json: invalid JSON"):
-        NaoViewerConfig.from_json_file(broken)
+        NaoqiViewerConfig.from_json_file(broken)
     with pytest.raises(ConfigError, match="missing.json"):
-        NaoViewerConfig.from_json_file(tmp_path / "missing.json")
+        NaoqiViewerConfig.from_json_file(tmp_path / "missing.json")
     with pytest.raises(ConfigError, match="invalid JSON"):
-        NaoViewerConfig.from_json("{")
+        NaoqiViewerConfig.from_json("{")
     with pytest.raises(ConfigError, match="config must be an object"):
-        NaoViewerConfig.from_json("[]")
+        NaoqiViewerConfig.from_json("[]")
 
 
 @pytest.mark.parametrize("path", sorted(EXAMPLES.glob("*.json")), ids=lambda p: p.name)
 def test_example_files_load(path: Path):
-    config = NaoViewerConfig.from_json_file(path)
+    config = NaoqiViewerConfig.from_json_file(path)
     assert config.to_dict() == json.loads(path.read_text())  # every field written out
 
 
@@ -169,7 +169,7 @@ def test_the_examples_exist():
 
 
 def test_importing_the_config_loads_neither_mujoco_nor_qi():
-    code = "import sys, nao_viewer.config; print(sorted(m for m in ('mujoco', 'qi') if m in sys.modules))"
+    code = "import sys, naoqi_viewer.config; print(sorted(m for m in ('mujoco', 'qi') if m in sys.modules))"
     result = subprocess.run(
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     )

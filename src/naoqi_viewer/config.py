@@ -1,10 +1,10 @@
-"""Viewer configuration: `NaoViewerConfig` and its blocks (specs/config.md).
+"""Viewer configuration: `NaoqiViewerConfig` and its blocks (specs/config.md).
 
 One declarative description of a viewer, built in code or loaded with the `from_dict` /
 `from_json` / `from_json_file` trio. Invalid input raises `ConfigError` naming the offending key
 path. Each block checks its own ranges on construction; the loaders also check shape, types and
 unknown keys. A default is declared once, on the dataclass field: `parse_block` passes only the
-keys present and lets the dataclass apply the rest. Follows nao-bridge's config pattern; imports
+keys present and lets the dataclass apply the rest. Follows naoqi-bridge's config pattern; imports
 neither mujoco nor qi.
 """
 
@@ -115,7 +115,7 @@ def _require_nonempty(value: str, key: str) -> None:
 
 
 def bundled_scenes() -> tuple[str, ...]:
-    """The scene names shipped in nao_viewer/scenes/."""
+    """The scene names shipped in naoqi_viewer/scenes/."""
     return tuple(sorted(path.stem for path in _SCENES_DIR.glob("*.xml")))
 
 
@@ -219,7 +219,7 @@ class WorldSettings(JsonConfig):
 
 
 @dataclass(frozen=True)
-class NaoViewerConfig(JsonConfig):
+class NaoqiViewerConfig(JsonConfig):
     """A viewer: its mode, the NAOqi it watches, its world and options (specs/config.md)."""
 
     mode: Mode = "mirror"

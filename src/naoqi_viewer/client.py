@@ -1,6 +1,6 @@
-"""The caller's side: a `NaoViewer`, built from a config, starts and drives a viewer process.
+"""The caller's side: a `NaoqiViewer`, built from a config, starts and drives a viewer process.
 
-Standard library and numpy only: importing nao_viewer loads neither mujoco nor qi.
+Standard library and numpy only: importing naoqi_viewer loads neither mujoco nor qi.
 """
 
 import json
@@ -19,10 +19,10 @@ from typing import IO, Any, Literal, Self
 
 import numpy as np
 
-from nao_viewer import protocol
-from nao_viewer.config import NaoViewerConfig
+from naoqi_viewer import protocol
+from naoqi_viewer.config import NaoqiViewerConfig
 
-_process_log = logging.getLogger("nao_viewer.viewer_process")
+_process_log = logging.getLogger("naoqi_viewer.viewer_process")
 _LEVELS = {
     "DEBUG": logging.DEBUG,
     "INFO": logging.INFO,
@@ -60,7 +60,7 @@ class CameraFrame:
 @dataclass(frozen=True)
 class ViewerStatus:
     mode: str  # mirror / sim
-    target: str | None  # real / nao-sim / virtual; None until NAOqi first connects
+    target: str | None  # real / naoqi-sim / virtual; None until NAOqi first connects
     naoqi_version: str | None
     url: str
     variant: str  # placeholder / aldebaran
@@ -69,7 +69,7 @@ class ViewerStatus:
     data_age: float | None  # s; None before the first sample
 
 
-def _viewer_command(config: NaoViewerConfig) -> list[str]:
+def _viewer_command(config: NaoqiViewerConfig) -> list[str]:
     """The command running the viewer process (tests replace it with a fake viewer process)."""
     if sys.platform == "darwin" and not config.headless:
         # MuJoCo's window must run on the main thread of an mjpython process on macOS.
@@ -77,19 +77,19 @@ def _viewer_command(config: NaoViewerConfig) -> list[str]:
         if not python.exists():
             raise LaunchError(
                 f"MuJoCo's window needs mjpython on macOS, and there is none next to {sys.executable}; "
-                "it comes with the mujoco package, so install nao-viewer into this Python environment"
+                "it comes with the mujoco package, so install naoqi-viewer into this Python environment"
             )
     else:
         python = Path(sys.executable)
     return [
         str(python),
         "-m",
-        "nao_viewer.viewer_process",
+        "naoqi_viewer.viewer_process",
         json.dumps(config.to_dict()),
     ]
 
 
-def _viewer_env(config: NaoViewerConfig) -> dict[str, str] | None:
+def _viewer_env(config: NaoqiViewerConfig) -> dict[str, str] | None:
     """The viewer process's environment, or None to inherit ours.
 
     A headless viewer on Linux renders through EGL unless MUJOCO_GL says otherwise: with Mesa's
@@ -176,33 +176,33 @@ class _Running:
     output: _ProcessOutput
 
 
-class NaoViewer:
-    """A viewer on a NAO, built from a `NaoViewerConfig`; `launch()` opens its window.
+class NaoqiViewer:
+    """A viewer on a NAO, built from a `NaoqiViewerConfig`; `launch()` opens its window.
 
-    The constructor has no side effects. One NaoViewer is one window: `launch()` again after the
+    The constructor has no side effects. One NaoqiViewer is one window: `launch()` again after the
     window was closed opens a new one. Calls from several threads are serialized.
     """
 
-    def __init__(self, config: NaoViewerConfig | None = None) -> None:
-        self._config = config if config is not None else NaoViewerConfig()
+    def __init__(self, config: NaoqiViewerConfig | None = None) -> None:
+        self._config = config if config is not None else NaoqiViewerConfig()
         self._running: _Running | None = None
         self._lock = threading.Lock()
         self._next_id = 0
 
     @classmethod
     def from_dict(cls, data: Any) -> Self:
-        return cls(NaoViewerConfig.from_dict(data))
+        return cls(NaoqiViewerConfig.from_dict(data))
 
     @classmethod
     def from_json(cls, text: str) -> Self:
-        return cls(NaoViewerConfig.from_json(text))
+        return cls(NaoqiViewerConfig.from_json(text))
 
     @classmethod
     def from_json_file(cls, path: str | Path) -> Self:
-        return cls(NaoViewerConfig.from_json_file(path))
+        return cls(NaoqiViewerConfig.from_json_file(path))
 
     @property
-    def config(self) -> NaoViewerConfig:
+    def config(self) -> NaoqiViewerConfig:
         return self._config
 
     def launch(self) -> None:
@@ -214,7 +214,7 @@ class NaoViewer:
         """
         if self.running:
             raise RuntimeError(
-                "this viewer is already running; close() it first, or use another NaoViewer"
+                "this viewer is already running; close() it first, or use another NaoqiViewer"
             )
         self.close()  # drop what's left of a previous run
         timeout = self._config.launch_timeout_s

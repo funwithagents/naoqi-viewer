@@ -1,6 +1,6 @@
 # Agent instructions
 
-Start at [specs/_overview.md](specs/_overview.md) for the big picture of nao-viewer (goals, scope, architecture, status), then [specs/_index.md](specs/_index.md) for the list of specs and their status before making design decisions or writing code — it lists each spec and whether it's still open ("Draft"/"Not started"), design-validated ("Stable"), or built ("Implemented"). For what's been (or is being) built, see [plans/_index.md](plans/_index.md), which lists each implementation plan and its status ("Todo"/"In progress"/"Done").
+Start at [specs/_overview.md](specs/_overview.md) for the big picture of naoqi-viewer (goals, scope, architecture, status), then [specs/_index.md](specs/_index.md) for the list of specs and their status before making design decisions or writing code — it lists each spec and whether it's still open ("Draft"/"Not started"), design-validated ("Stable"), or built ("Implemented"). For what's been (or is being) built, see [plans/_index.md](plans/_index.md), which lists each implementation plan and its status ("Todo"/"In progress"/"Done").
 
 ## Project map
 
@@ -10,36 +10,36 @@ Where things live. This is a coarse, module-level map — for the full file inve
 
 | Path | What's there |
 |---|---|
-| `src/nao_viewer/` | The library itself — one module per core concept (see below) |
+| `src/naoqi_viewer/` | The library itself — one module per core concept (see below) |
 | `specs/` | Pre-implementation design docs, one per concept, each with a `**Status:**` — mapped by [specs/_overview.md](specs/_overview.md), indexed by [specs/_index.md](specs/_index.md) |
 | `plans/` | Implementation plans turning settled specs into buildable steps — indexed by [plans/_index.md](plans/_index.md) |
-| `tests/` | Fast, deterministic, no-network tests; mirrors the `src/nao_viewer/` module structure |
+| `tests/` | Fast, deterministic, no-network tests; mirrors the `src/naoqi_viewer/` module structure |
 | `tests-e2e/` | Opt-in live tests against a running NAOqi given by `NAOQI_URL` (not collected by default `pytest`) |
 | `typings/` | Local type stubs for pyright (a partial `mujoco` stub: its compiled bindings carry no types) |
 | `examples/configs/` | Ready-to-use viewer config files, kept in sync with [config.md](specs/config.md) by a test |
-| `.github/workflows/` | CI: lint/types, the fast tier and the live tier on nao-sim's NAOqi 2.1 — see [ci.md](specs/ci.md) |
+| `.github/workflows/` | CI: lint/types, the fast tier and the live tier on naoqi-sim's NAOqi 2.1 — see [ci.md](specs/ci.md) |
 | `scripts/` | Repository tooling outside the package (CI's pseudo-terminal driver for `fetch-meshes`) — see [ci.md](specs/ci.md) |
 | `third_party/` | Vendored third-party sources with their licenses (the NAO URDF the model was converted from) — see `THIRD_PARTY_NOTICES.md` |
 
-### `src/nao_viewer/` modules
+### `src/naoqi_viewer/` modules
 
 <!-- One row per concept module. Keep this in sync with the code (a test enforces it). -->
 
 | Module | Role | Spec |
 |---|---|---|
-| [`src/nao_viewer/__init__.py`](src/nao_viewer/__init__.py) | Package glue (exempt from the spec rule) | — |
-| [`src/nao_viewer/source.py`](src/nao_viewer/source.py) | Pose sources: `connect` with retries, `NaoqiSource` polling NAOqi with reconnection and target identification | [source.md](specs/source.md) |
-| [`src/nao_viewer/config.py`](src/nao_viewer/config.py) | `NaoViewerConfig`: the viewer's declarative config, its loaders and `ConfigError` | [config.md](specs/config.md) |
-| [`src/nao_viewer/client.py`](src/nao_viewer/client.py) | The caller's side: `NaoViewer`, built from a config, launching and driving a viewer process (standard library + numpy only) | [api.md](specs/api.md) |
-| [`src/nao_viewer/protocol.py`](src/nao_viewer/protocol.py) | Message framing between a caller and its viewer process | [api.md](specs/api.md) |
-| [`src/nao_viewer/viewer_process.py`](src/nao_viewer/viewer_process.py) | The viewer process: world, pose source, request server, window, camera renders | [api.md](specs/api.md) |
-| [`src/nao_viewer/viewer.py`](src/nao_viewer/viewer.py) | The window: `ViewerState` (posing, status overlay, ghost, attribution) and `run` on MuJoCo's passive viewer | [viewer.md](specs/viewer.md) |
-| [`src/nao_viewer/model.py`](src/nao_viewer/model.py) | The NAO model (`models/nao.xml`) and scenes (`scenes/`): `load_world`, `NaoPose`, `PoseWriter` | [model.md](specs/model.md) |
-| [`src/nao_viewer/meshes.py`](src/nao_viewer/meshes.py) | `fetch-meshes`: the license-gated download and unlock of nao-meshes' encrypted OBJ/PNG archive, `installed`, `remove`, and `apply_visuals` swapping the placeholder visuals for Aldebaran's meshes | [meshes.md](specs/meshes.md) |
-| [`src/nao_viewer/check_model.py`](src/nao_viewer/check_model.py) | `check-model`: moves a NAOqi through random configurations and compares its effectors with the model's sites | [check_model.md](specs/check_model.md) |
-| [`src/nao_viewer/cli.py`](src/nao_viewer/cli.py) | The `nao-viewer` command: `view` and `check-model`, argument parsing only | [cli.md](specs/cli.md) |
+| [`src/naoqi_viewer/__init__.py`](src/naoqi_viewer/__init__.py) | Package glue (exempt from the spec rule) | — |
+| [`src/naoqi_viewer/source.py`](src/naoqi_viewer/source.py) | Pose sources: `connect` with retries, `NaoqiSource` polling NAOqi with reconnection and target identification | [source.md](specs/source.md) |
+| [`src/naoqi_viewer/config.py`](src/naoqi_viewer/config.py) | `NaoqiViewerConfig`: the viewer's declarative config, its loaders and `ConfigError` | [config.md](specs/config.md) |
+| [`src/naoqi_viewer/client.py`](src/naoqi_viewer/client.py) | The caller's side: `NaoqiViewer`, built from a config, launching and driving a viewer process (standard library + numpy only) | [api.md](specs/api.md) |
+| [`src/naoqi_viewer/protocol.py`](src/naoqi_viewer/protocol.py) | Message framing between a caller and its viewer process | [api.md](specs/api.md) |
+| [`src/naoqi_viewer/viewer_process.py`](src/naoqi_viewer/viewer_process.py) | The viewer process: world, pose source, request server, window, camera renders | [api.md](specs/api.md) |
+| [`src/naoqi_viewer/viewer.py`](src/naoqi_viewer/viewer.py) | The window: `ViewerState` (posing, status overlay, ghost, attribution) and `run` on MuJoCo's passive viewer | [viewer.md](specs/viewer.md) |
+| [`src/naoqi_viewer/model.py`](src/naoqi_viewer/model.py) | The NAO model (`models/nao.xml`) and scenes (`scenes/`): `load_world`, `NaoPose`, `PoseWriter` | [model.md](specs/model.md) |
+| [`src/naoqi_viewer/meshes.py`](src/naoqi_viewer/meshes.py) | `fetch-meshes`: the license-gated download and unlock of naoqi-meshes' encrypted OBJ/PNG archive, `installed`, `remove`, and `apply_visuals` swapping the placeholder visuals for Aldebaran's meshes | [meshes.md](specs/meshes.md) |
+| [`src/naoqi_viewer/check_model.py`](src/naoqi_viewer/check_model.py) | `check-model`: moves a NAOqi through random configurations and compares its effectors with the model's sites | [check_model.md](specs/check_model.md) |
+| [`src/naoqi_viewer/cli.py`](src/naoqi_viewer/cli.py) | The `naoqi-viewer` command: `view` and `check-model`, argument parsing only | [cli.md](specs/cli.md) |
 
-**Keep this map current:** when you add, rename, or remove a top-level `src/nao_viewer/` module or a root directory, update the map in the same change — same discipline as keeping spec/plan statuses honest (below). A test (`tests/test_project_map.py`) enforces that every `src/nao_viewer/*.py` module appears here and vice-versa — and that the spec frontmatter (see below) stays honest too.
+**Keep this map current:** when you add, rename, or remove a top-level `src/naoqi_viewer/` module or a root directory, update the map in the same change — same discipline as keeping spec/plan statuses honest (below). A test (`tests/test_project_map.py`) enforces that every `src/naoqi_viewer/*.py` module appears here and vice-versa — and that the spec frontmatter (see below) stays honest too.
 
 ## Keeping statuses current
 
@@ -60,7 +60,7 @@ Every spec opens with a YAML frontmatter block naming the code and tests it gove
 ```
 ---
 code:
-  - src/nao_viewer/<module>.py
+  - src/naoqi_viewer/<module>.py
 tests:
   - tests/test_<module>.py
 ---
@@ -70,7 +70,7 @@ This is the **spec → code/tests** mapping — the inverse of the module → sp
 
 The mapping is **many-to-many**: a file can be governed by several specs, so the same path legitimately appears in more than one spec's frontmatter.
 
-**Keep it current** (same discipline as statuses): when you move, rename, or delete a file a spec governs — or add a new `src/nao_viewer/` module — update the affected spec's `code:`/`tests:` in the same change. Before implementation, a spec's frontmatter names the files its plan will create. `tests/test_project_map.py` enforces three invariants: every path listed by an `Implemented` spec exists (earlier statuses may name files that don't exist yet), every spec declares a non-empty `code:` list, and every concept module in `src/nao_viewer/` is named by at least one spec (`__init__.py` is exempt as package glue).
+**Keep it current** (same discipline as statuses): when you move, rename, or delete a file a spec governs — or add a new `src/naoqi_viewer/` module — update the affected spec's `code:`/`tests:` in the same change. Before implementation, a spec's frontmatter names the files its plan will create. `tests/test_project_map.py` enforces three invariants: every path listed by an `Implemented` spec exists (earlier statuses may name files that don't exist yet), every spec declares a non-empty `code:` list, and every concept module in `src/naoqi_viewer/` is named by at least one spec (`__init__.py` is exempt as package glue).
 
 ## Testing
 
@@ -80,7 +80,7 @@ The mapping is **many-to-many**: a file can be governed by several specs, so the
 
 ### Live/e2e tests
 
-Some tests talk to a live NAOqi: a real robot, or a nao-sim container started separately. They live in `tests-e2e/`, separate from `tests/`, so the default `uv run pytest` never runs them. The normal dev loop uses the in-process mock NAOqi instead (see [specs/testing.md](specs/testing.md)). Run the live tier explicitly with `NAOQI_URL=tcp://<host>:9559 uv run pytest tests-e2e`. Without `NAOQI_URL`, every live test **skips**. Viewers open headless by default; `NAO_VIEWER_E2E_WINDOW=1` opens their windows instead (needs a display), and the mirror test runs only then. Never import nao-sim or nao-bridge from tests: nao-sim depends on nao-viewer, not the other way round.
+Some tests talk to a live NAOqi: a real robot, or a naoqi-sim container started separately. They live in `tests-e2e/`, separate from `tests/`, so the default `uv run pytest` never runs them. The normal dev loop uses the in-process mock NAOqi instead (see [specs/testing.md](specs/testing.md)). Run the live tier explicitly with `NAOQI_URL=tcp://<host>:9559 uv run pytest tests-e2e`. Without `NAOQI_URL`, every live test **skips**. Viewers open headless by default; `NAOQI_VIEWER_E2E_WINDOW=1` opens their windows instead (needs a display), and the mirror test runs only then. Never import naoqi-sim or naoqi-bridge from tests: naoqi-sim depends on naoqi-viewer, not the other way round.
 
 ## Implementation plans
 

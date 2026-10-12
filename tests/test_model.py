@@ -9,9 +9,9 @@ import numpy as np
 import pytest
 from mesh_archive import install_fake_release
 
-from nao_viewer import meshes
-from nao_viewer import model as nao_model
-from nao_viewer.model import (
+from naoqi_viewer import meshes
+from naoqi_viewer import model as nao_model
+from naoqi_viewer.model import (
     JOINT_NAMES,
     NaoPose,
     PoseWriter,
@@ -223,7 +223,7 @@ def test_pose_writer_ignores_unknown_joints_once_and_keeps_missing_ones(
     data = mujoco.MjData(world)
     writer = PoseWriter(world)
     writer.apply(data, _standing({"HeadPitch": 0.2, "LFoo": 1.0}))
-    with caplog.at_level(logging.INFO, logger="nao_viewer.model"):
+    with caplog.at_level(logging.INFO, logger="naoqi_viewer.model"):
         writer.apply(data, _standing({"HeadYaw": -0.5, "LFoo": 2.0}))
         writer.apply(data, _standing({"LFoo": 3.0}))
     assert data.qpos[world.jnt_qposadr[world.joint("HeadPitch").id]] == pytest.approx(
@@ -236,7 +236,7 @@ def test_pose_writer_ignores_unknown_joints_once_and_keeps_missing_ones(
     assert not [r for r in caplog.records if "LFoo" in r.getMessage()]
 
     fresh = PoseWriter(world)
-    with caplog.at_level(logging.INFO, logger="nao_viewer.model"):
+    with caplog.at_level(logging.INFO, logger="naoqi_viewer.model"):
         fresh.apply(data, _standing({"LFoo": 1.0}))
         fresh.apply(data, _standing({"LFoo": 1.0}))
     assert len([r for r in caplog.records if "LFoo" in r.getMessage()]) == 1
@@ -304,11 +304,11 @@ def test_load_world_accepts_a_user_scene_file(tmp_path: Path):
 
 def test_load_world_names_the_model_for_the_window_title():
     model = load_world(
-        variant="placeholder", name="nao-viewer · mirror · tcp://127.0.0.1:9559"
+        variant="placeholder", name="naoqi-viewer · mirror · tcp://127.0.0.1:9559"
     )
     assert (
         model.names.split(b"\0")[0].decode()
-        == "nao-viewer · mirror · tcp://127.0.0.1:9559"
+        == "naoqi-viewer · mirror · tcp://127.0.0.1:9559"
     )
 
 
@@ -323,9 +323,9 @@ def test_variants_without_installed_meshes(
     install_fake_release(tmp_path, monkeypatch)  # pinned, but never fetched
     assert resolve_variant() == "placeholder"
     assert resolve_variant("placeholder") == "placeholder"
-    with pytest.raises(FileNotFoundError, match="nao-viewer fetch-meshes"):
+    with pytest.raises(FileNotFoundError, match="naoqi-viewer fetch-meshes"):
         resolve_variant("aldebaran")
-    with pytest.raises(FileNotFoundError, match="nao-viewer fetch-meshes"):
+    with pytest.raises(FileNotFoundError, match="naoqi-viewer fetch-meshes"):
         load_world(variant="aldebaran")
 
 

@@ -12,26 +12,26 @@ import numpy as np
 import pytest
 from mock_naoqi import MockNaoqi
 
-from nao_viewer import (
+from naoqi_viewer import (
     NaoqiSettings,
-    NaoViewer,
-    NaoViewerConfig,
+    NaoqiViewer,
+    NaoqiViewerConfig,
     WorldSettings,
     client,
     protocol,
     viewer_process,
 )
-from nao_viewer.model import NaoPose, PoseWriter, load_world
-from nao_viewer.source import Sample, TargetInfo
-from nao_viewer.viewer_process import OffscreenRenderer, RequestServer, main
+from naoqi_viewer.model import NaoPose, PoseWriter, load_world
+from naoqi_viewer.source import Sample, TargetInfo
+from naoqi_viewer.viewer_process import OffscreenRenderer, RequestServer, main
 
 URL = "tcp://127.0.0.1:9559"
 
 
 def no_offscreen_gl(reason: str) -> NoReturn:
     """Skip a test that needs offscreen OpenGL, or fail it where the run requires it (CI sets
-    NAO_VIEWER_REQUIRE_OFFSCREEN_GL=1, so a runner that lost its GL fails instead of passing)."""
-    if os.environ.get("NAO_VIEWER_REQUIRE_OFFSCREEN_GL"):
+    NAOQI_VIEWER_REQUIRE_OFFSCREEN_GL=1, so a runner that lost its GL fails instead of passing)."""
+    if os.environ.get("NAOQI_VIEWER_REQUIRE_OFFSCREEN_GL"):
         pytest.fail(f"offscreen OpenGL is required on this run, and {reason}")
     pytest.skip(reason)
 
@@ -132,7 +132,7 @@ def test_ready_line_on_the_first_frame_only(world: mujoco.MjModel):
         harness.frame()
         harness.frame()
         assert harness.announced == [
-            f"NAO_VIEWER_READY port={harness.server.port} protocol=1"
+            f"NAOQI_VIEWER_READY port={harness.server.port} protocol=1"
         ]
     finally:
         harness.close()
@@ -151,7 +151,7 @@ def test_hello_and_status(sim: Harness):
         header["pose_seq"],
     ) == (None, None, None, 0)
 
-    sim.source.info = TargetInfo(URL, "nao-sim", "0.3.0")
+    sim.source.info = TargetInfo(URL, "naoqi-sim", "0.3.0")
     sim.source.sample = Sample(
         9,
         NaoPose({}, (0.0, 0.0, 0.3), (1.0, 0.0, 0.0, 0.0)),
@@ -164,7 +164,7 @@ def test_hello_and_status(sim: Harness):
         header["target"],
         header["naoqi_version"],
         header["url"],
-    ) == ("sim", "nao-sim", "0.3.0", URL)
+    ) == ("sim", "naoqi-sim", "0.3.0", URL)
     assert (header["variant"], header["rate"], header["pose_seq"]) == (
         "placeholder",
         48.0,
@@ -278,7 +278,7 @@ def test_offscreen_renderer_sees_the_table_from_both_cameras(world: mujoco.MjMod
 def test_an_invalid_config_is_a_startup_error(capsys: pytest.CaptureFixture[str]):
     assert main(['{"naoqi": {"rate_hz": 0}}']) == 1
     out = capsys.readouterr().out.strip()
-    assert out.startswith("NAO_VIEWER_ERROR invalid viewer config: naoqi.rate_hz")
+    assert out.startswith("NAOQI_VIEWER_ERROR invalid viewer config: naoqi.rate_hz")
 
 
 def test_a_missing_scene_file_is_a_startup_error(
@@ -288,7 +288,7 @@ def test_a_missing_scene_file_is_a_startup_error(
     assert main([f'{{"world": {{"scene": "{missing}"}}}}']) == 1
     assert (
         capsys.readouterr().out.strip()
-        == f"NAO_VIEWER_ERROR scene file not found: {missing}"
+        == f"NAOQI_VIEWER_ERROR scene file not found: {missing}"
     )
 
 
@@ -303,7 +303,7 @@ def test_a_headless_viewer_that_cannot_render_is_a_startup_error(
     assert main(['{"mode": "sim", "headless": true}']) == 1
     out = capsys.readouterr().out.strip()
     assert out.startswith(
-        "NAO_VIEWER_ERROR a headless viewer cannot render offscreen with MUJOCO_GL=egl "
+        "NAOQI_VIEWER_ERROR a headless viewer cannot render offscreen with MUJOCO_GL=egl "
         "(RuntimeError: no OpenGL context)"
     )
     assert "libegl1 libopengl0 libgl1-mesa-dri" in out
@@ -320,8 +320,8 @@ renderer.render()
 """
 
 
-def headless_config(url: str) -> NaoViewerConfig:
-    return NaoViewerConfig(
+def headless_config(url: str) -> NaoqiViewerConfig:
+    return NaoqiViewerConfig(
         mode="sim",
         headless=True,
         naoqi=NaoqiSettings(url=url),
@@ -350,7 +350,7 @@ def offscreen_gl() -> None:
         )
 
 
-def wait_for_pose(viewer: NaoViewer, after: int = 0) -> int:
+def wait_for_pose(viewer: NaoqiViewer, after: int = 0) -> int:
     deadline = time.monotonic() + 10
     while (seq := viewer.status().pose_seq) <= after:
         assert time.monotonic() < deadline, "no pose from the mock NAOqi"
@@ -364,7 +364,7 @@ def test_a_headless_viewer_serves_frames_that_follow_the_robot(
 ):
     url, mock = mock_naoqi
     mock.set_pose({"HeadYaw": 0.0, "HeadPitch": 0.2})
-    with NaoViewer(headless_config(url)) as viewer:
+    with NaoqiViewer(headless_config(url)) as viewer:
         seq = wait_for_pose(viewer)
         status = viewer.status()
         assert (status.mode, status.target, status.variant) == (

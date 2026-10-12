@@ -1,7 +1,7 @@
 """A fake viewer process for client tests: speaks the protocol, no MuJoCo, no window, no NAOqi.
 
-`NaoViewer.launch()` runs it in place of `python -m nao_viewer.viewer_process <config>` (see test_client.py).
-NAO_FAKE_VIEWER picks a scripted behavior; NAO_FAKE_VIEWER_OPS names a file where each received op
+`NaoqiViewer.launch()` runs it in place of `python -m naoqi_viewer.viewer_process <config>` (see test_client.py).
+NAOQI_FAKE_VIEWER picks a scripted behavior; NAOQI_FAKE_VIEWER_OPS names a file where each received op
 is appended, one per line.
 """
 
@@ -13,12 +13,12 @@ import time
 
 import numpy as np
 
-from nao_viewer import protocol
+from naoqi_viewer import protocol
 
-config = json.loads(sys.argv[1])  # NaoViewerConfig.to_dict()
-behavior = os.environ.get("NAO_FAKE_VIEWER", "")
-ops_file = os.environ.get("NAO_FAKE_VIEWER_OPS")
-config_file = os.environ.get("NAO_FAKE_VIEWER_CONFIG")
+config = json.loads(sys.argv[1])  # NaoqiViewerConfig.to_dict()
+behavior = os.environ.get("NAOQI_FAKE_VIEWER", "")
+ops_file = os.environ.get("NAOQI_FAKE_VIEWER_OPS")
+config_file = os.environ.get("NAOQI_FAKE_VIEWER_CONFIG")
 if config_file:
     with open(config_file, "w") as f:
         json.dump(config, f)
@@ -29,7 +29,7 @@ def log(line: str) -> None:
 
 
 if behavior == "error":
-    log("INFO nao_viewer.model: loading the scene")
+    log("INFO naoqi_viewer.model: loading the scene")
     print(
         f"{protocol.ERROR_PREFIX} unknown scene 'nope'; bundled scenes: empty, table",
         flush=True,
@@ -50,8 +50,8 @@ print(
     flush=True,
 )
 print(protocol.ready_line(listener.getsockname()[1]), flush=True)
-log("INFO nao_viewer.source: connected to the fake NAOqi")
-log("WARNING nao_viewer.viewer: a warning from the viewer process")
+log("INFO naoqi_viewer.source: connected to the fake NAOqi")
+log("WARNING naoqi_viewer.viewer: a warning from the viewer process")
 log("[I] 1791534114.3 qimessaging.session: a native log line")
 connection, _ = listener.accept()
 
@@ -68,15 +68,15 @@ try:
         if op == "hello":
             reply.update(
                 protocol=int(
-                    os.environ.get("NAO_FAKE_VIEWER_PROTOCOL", protocol.PROTOCOL)
+                    os.environ.get("NAOQI_FAKE_VIEWER_PROTOCOL", protocol.PROTOCOL)
                 ),
-                nao_viewer="0.1.0",
+                naoqi_viewer="0.1.0",
                 mode=config["mode"],
             )
         elif op == "status":
             reply.update(
                 mode=config["mode"],
-                target="nao-sim",
+                target="naoqi-sim",
                 naoqi_version="0.3.0",
                 url=config["naoqi"]["url"],
                 variant="placeholder",

@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from mock_naoqi import FRAME_TORSO, FRAME_WORLD, MockNaoqi
 
-from nao_viewer.source import connect
+from naoqi_viewer.source import connect
 
 # The left sole below the torso origin at zero pose, from the URDF: hip offset, thigh, tibia, foot.
 LEFT_SOLE_AT_ZERO = (0.0, 0.05, -(0.085 + 0.1 + 0.1029 + 0.04511))

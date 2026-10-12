@@ -2,7 +2,7 @@
 
 ## NAO URDF (`ros-naoqi/nao_robot`)
 
-`third_party/nao_description/nao.urdf` is vendored unmodified from [ros-naoqi/nao_robot](https://github.com/ros-naoqi/nao_robot) (see `third_party/nao_description/SOURCE`). The NAO model `src/nao_viewer/models/nao.xml` is derived from it: kinematics, joint limits, masses and inertias. Both are distributed under the BSD-3-Clause license below.
+`third_party/nao_description/nao.urdf` is vendored unmodified from [ros-naoqi/nao_robot](https://github.com/ros-naoqi/nao_robot) (see `third_party/nao_description/SOURCE`). The NAO model `src/naoqi_viewer/models/nao.xml` is derived from it: kinematics, joint limits, masses and inertias. Both are distributed under the BSD-3-Clause license below.
 
 ```
 Copyright (c) 2009-2013, A. Hornung, University of Freiburg

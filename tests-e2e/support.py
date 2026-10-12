@@ -20,8 +20,8 @@ def require_env(name: str) -> str:
 
 
 def window_requested() -> bool:
-    """Whether this run opens its viewers with their windows (NAO_VIEWER_E2E_WINDOW), not headless."""
-    return os.environ.get("NAO_VIEWER_E2E_WINDOW", "").strip().lower() in {
+    """Whether this run opens its viewers with their windows (NAOQI_VIEWER_E2E_WINDOW), not headless."""
+    return os.environ.get("NAOQI_VIEWER_E2E_WINDOW", "").strip().lower() in {
         "1",
         "true",
         "yes",
@@ -32,17 +32,17 @@ def window_requested() -> bool:
 def require_window() -> None:
     """Skip the calling test in a headless run: it needs a viewer window."""
     if not window_requested():
-        pytest.skip("needs a viewer window; set NAO_VIEWER_E2E_WINDOW=1 to run it")
+        pytest.skip("needs a viewer window; set NAOQI_VIEWER_E2E_WINDOW=1 to run it")
 
 
 def require_meshes() -> Path:
-    """The installed Aldebaran meshes, or skip (fail with NAO_VIEWER_REQUIRE_MESHES set)."""
-    from nao_viewer import meshes
+    """The installed Aldebaran meshes, or skip (fail with NAOQI_VIEWER_REQUIRE_MESHES set)."""
+    from naoqi_viewer import meshes
 
     directory = meshes.installed()
     if directory is None:
-        reason = "Aldebaran's meshes are not installed; run `nao-viewer fetch-meshes`"
-        if os.environ.get("NAO_VIEWER_REQUIRE_MESHES"):
+        reason = "Aldebaran's meshes are not installed; run `naoqi-viewer fetch-meshes`"
+        if os.environ.get("NAOQI_VIEWER_REQUIRE_MESHES"):
             pytest.fail(
                 f"this run requires the meshes, and {reason[0].lower()}{reason[1:]}"
             )

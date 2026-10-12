@@ -1,4 +1,4 @@
-"""The `nao-viewer` command: argument parsing on top of the modules, nothing more."""
+"""The `naoqi-viewer` command: argument parsing on top of the modules, nothing more."""
 
 import argparse
 import logging
@@ -6,8 +6,8 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from nao_viewer.client import LaunchError, NaoViewer
-from nao_viewer.config import ConfigError
+from naoqi_viewer.client import LaunchError, NaoqiViewer
+from naoqi_viewer.config import ConfigError
 
 _EXIT_FAILURE = 1
 _EXIT_USAGE = 2
@@ -29,7 +29,7 @@ def _positive[T: (int, float)](kind: Callable[[str], T]) -> Callable[[str], T]:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="nao-viewer", description="MuJoCo viewer for NAO."
+        prog="naoqi-viewer", description="MuJoCo viewer for NAO."
     )
     verbosity = parser.add_mutually_exclusive_group()
     verbosity.add_argument(
@@ -46,7 +46,7 @@ def _parser() -> argparse.ArgumentParser:
     view.add_argument(
         "--config",
         metavar="PATH",
-        help="a NaoViewerConfig JSON file (default: mirror a local NAOqi, empty scene)",
+        help="a NaoqiViewerConfig JSON file (default: mirror a local NAOqi, empty scene)",
     )
 
     check = commands.add_parser(
@@ -72,7 +72,7 @@ def _parser() -> argparse.ArgumentParser:
         "--archive",
         metavar="PATH",
         type=Path,
-        help="a local copy of the nao-meshes archive (checked like a download)",
+        help="a local copy of the naoqi-meshes archive (checked like a download)",
     )
     fetch.add_argument(
         "--force", action="store_true", help="install again even if already installed"
@@ -84,12 +84,14 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _error(message: object) -> None:
-    print(f"nao-viewer: error: {message}", file=sys.stderr)
+    print(f"naoqi-viewer: error: {message}", file=sys.stderr)
 
 
 def _view(args: argparse.Namespace) -> int:
     try:
-        viewer = NaoViewer.from_json_file(args.config) if args.config else NaoViewer()
+        viewer = (
+            NaoqiViewer.from_json_file(args.config) if args.config else NaoqiViewer()
+        )
     except ConfigError as exc:
         _error(exc)
         return _EXIT_USAGE
@@ -108,7 +110,7 @@ def _view(args: argparse.Namespace) -> int:
 
 def _check_model(args: argparse.Namespace) -> int:
     # Loads mujoco and qi, which `view` keeps out of this process.
-    from nao_viewer import check_model
+    from naoqi_viewer import check_model
 
     try:
         report = check_model.run(
@@ -127,7 +129,7 @@ def _check_model(args: argparse.Namespace) -> int:
 
 
 def _fetch_meshes(args: argparse.Namespace) -> int:
-    from nao_viewer import meshes
+    from naoqi_viewer import meshes
 
     if args.remove:
         if args.archive or args.force:

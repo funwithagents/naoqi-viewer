@@ -1,6 +1,6 @@
 ---
 code:
-  - src/nao_viewer/source.py
+  - src/naoqi_viewer/source.py
 tests:
   - tests/test_source.py
 ---
@@ -28,7 +28,7 @@ class Sample:
 @dataclass(frozen=True)
 class TargetInfo:
     url: str
-    target: Literal["real", "nao-sim", "virtual"]
+    target: Literal["real", "naoqi-sim", "virtual"]
     naoqi_version: str | None
 
 class PoseSource(Protocol):
@@ -44,7 +44,7 @@ class PoseSource(Protocol):
 ### `connect(url, *, cancel=None) -> qi.Session`
 
 - Accepts `tcp://host:port`, `host:port`, or `host` alone (port 9559 implied); `normalize_url(url)` does that mapping.
-- Retries the connection up to 5 times, with 0.2 s, 0.4 s, 0.8 s… backoff. The libqi 3 wheels fail about one connect in three against NAOqi 2.1 with an instant `disconnected` error (root cause in the fork unknown), and nao-mcp already works around it the same way. After the last attempt it raises `ConnectionError`.
+- Retries the connection up to 5 times, with 0.2 s, 0.4 s, 0.8 s… backoff. The libqi 3 wheels fail about one connect in three against NAOqi 2.1 with an instant `disconnected` error (root cause in the fork unknown), and naoqi-mcp already works around it the same way. After the last attempt it raises `ConnectionError`.
 - `cancel` (a `threading.Event`) cuts the retries short with a `ConnectionError`, so `NaoqiSource.close()` doesn't wait out a backoff.
 - Shared by `NaoqiSource`, [check_model.md](check_model.md) and the viewer process ([api.md](api.md)).
 
@@ -55,7 +55,7 @@ class PoseSource(Protocol):
   - reads `ALMotion.getBodyNames("Body")` once and keeps that order;
   - logs names unknown to the model (`model.JOINT_NAMES`) once per connection, and leaves them out of the samples' poses; joints NAOqi doesn't report stay at 0;
   - identifies the target:
-    - **`nao-sim`** if the `NaoSim` service exists, NAOqi version from the ALMemory key `NaoSim/NaoqiVersion` (not `NaoSim/Version`, which holds nao-sim's own version);
+    - **`naoqi-sim`** if the `NaoqiSim` service exists, NAOqi version from the ALMemory key `NaoqiSim/NaoqiVersion` (not `NaoqiSim/Version`, which holds naoqi-sim's own version);
     - **`real`** if `ALSystem` exists, version from `ALSystem.systemVersion()`;
     - **`virtual`** otherwise: a plain desktop `naoqi-bin` has neither, and its version is unknown (`None`).
 - **Polling thread**: each tick calls `ALMotion.getAngles("Body", True)` and `ALMotion.getTransform("Torso", 1, True)` (frame 1 = world). With `commanded=True` it also calls `getAngles("Body", False)`. Ticks are due on a fixed schedule at `rate_hz` (timing each tick from its actual start would lose the sleep overshoot, about 3 ms per 20 ms on macOS, and run at ~43 Hz); if a tick overruns, the next one starts immediately and the schedule restarts from there, rather than catching up.
@@ -64,5 +64,5 @@ class PoseSource(Protocol):
 
 ## Open questions
 
-1. **Polling cost**: two or three qi calls per tick at 50 Hz. If a real robot can't sustain the 30 Hz exit target, batching reads through `ALMemory.getListData` on the joint sensor keys is the fallback. It would need the per-version key maps that nao-bridge owns, so it's deferred until measured.
+1. **Polling cost**: two or three qi calls per tick at 50 Hz. If a real robot can't sustain the 30 Hz exit target, batching reads through `ALMemory.getListData` on the joint sensor keys is the fallback. It would need the per-version key maps that naoqi-bridge owns, so it's deferred until measured.
 2. **Virtual-robot sensors**: whether `getAngles(..., True)` on a virtual robot returns commanded values (unconfirmed). It doesn't change this design; the ghost is simply identical to the robot there.

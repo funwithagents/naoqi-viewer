@@ -9,7 +9,7 @@ from typing import Any, Literal, Protocol
 
 import qi
 
-from nao_viewer.model import JOINT_NAMES, NaoPose
+from naoqi_viewer.model import JOINT_NAMES, NaoPose
 
 _log = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ _RECONNECT_FIRST_DELAY = 0.5  # s, doubling up to _RECONNECT_MAX_DELAY
 _RECONNECT_MAX_DELAY = 5.0
 _FRAME_WORLD = 1
 
-Target = Literal["real", "nao-sim", "virtual"]
+Target = Literal["real", "naoqi-sim", "virtual"]
 
 
 @dataclass(frozen=True)
@@ -92,9 +92,9 @@ def connect(url: str, *, cancel: threading.Event | None = None) -> Any:
 
 def identify(session: Any, url: str) -> TargetInfo:
     services = {service["name"] for service in session.services()}
-    if "NaoSim" in services:
-        version = session.service("ALMemory").getData("NaoSim/NaoqiVersion")
-        return TargetInfo(url, "nao-sim", str(version))
+    if "NaoqiSim" in services:
+        version = session.service("ALMemory").getData("NaoqiSim/NaoqiVersion")
+        return TargetInfo(url, "naoqi-sim", str(version))
     if "ALSystem" in services:
         return TargetInfo(url, "real", str(session.service("ALSystem").systemVersion()))
     # A plain desktop naoqi-bin has neither service, and no way to ask its version.

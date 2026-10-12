@@ -2,7 +2,7 @@
 #
 # Three jobs side by side on GitHub's hosted runners, on every pull request and push to main:
 # `check` (lint, format, types), `fast-tier` (tests/, with a real headless viewer on the mock
-# NAOqi) and `e2e-nao-sim` (tests-e2e/ against a real NAOqi 2.1 that nao-sim builds on the
+# NAOqi) and `e2e-naoqi-sim` (tests-e2e/ against a real NAOqi 2.1 that naoqi-sim builds on the
 # runner; headless and windowed). Matrix entries run side by side too, and none waits on
 # another. All on Linux: macOS runners have no OpenGL and no Docker (specs/ci.md). No secret
 # is needed.
@@ -25,8 +25,8 @@ env:
   APT_GL: libegl1 libopengl0 libgl1-mesa-dri
   # A virtual X display, and Mesa's GLX for MuJoCo's window (GLFW), for the windowed live run.
   APT_WINDOW: xvfb xauth libgl1 libglx-mesa0
-  # The nao-sim commit whose docker/ recipes build the live job's NAOqi; bumped on purpose.
-  NAO_SIM_REF: d4cb4e82f947e09b352789e3134ae630f06d5e84
+  # The naoqi-sim commit whose docker/ recipes build the live job's NAOqi; bumped on purpose.
+  NAOQI_SIM_REF: d4cb4e82f947e09b352789e3134ae630f06d5e84
 
 jobs:
   check:
@@ -70,7 +70,7 @@ jobs:
           # GLFW, which needs a display), and a runner without offscreen GL fails the job
           # instead of skipping the headless viewer tests (specs/ci.md).
           MUJOCO_GL: egl
-          NAO_VIEWER_REQUIRE_OFFSCREEN_GL: "1"
+          NAOQI_VIEWER_REQUIRE_OFFSCREEN_GL: "1"
         run: uv run pytest -rs
 
   meshes:
@@ -97,29 +97,29 @@ jobs:
       - name: Meshes e2e test
         env:
           MUJOCO_GL: egl
-          NAO_VIEWER_REQUIRE_MESHES: "1"
-          NAO_VIEWER_REQUIRE_OFFSCREEN_GL: "1"
+          NAOQI_VIEWER_REQUIRE_MESHES: "1"
+          NAOQI_VIEWER_REQUIRE_OFFSCREEN_GL: "1"
         run: uv run pytest tests-e2e/test_meshes_live.py -rs
 
-  e2e-nao-sim:
-    name: live tier, nao-sim NAOqi 2.1, ${{ matrix.viewer }}
+  e2e-naoqi-sim:
+    name: live tier, naoqi-sim NAOqi 2.1, ${{ matrix.viewer }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       # Each entry on its own runner with its own NAOqi. headless: the tier's default, the
-      # mirror test skips. window: NAO_VIEWER_E2E_WINDOW=1 under a virtual X display, so the
+      # mirror test skips. window: NAOQI_VIEWER_E2E_WINDOW=1 under a virtual X display, so the
       # windowed loop and the mirror test run too.
       fail-fast: false
       matrix:
         viewer: [headless, window]
     steps:
       - uses: actions/checkout@v7
-      - name: nao-sim (its docker/ recipes and image tooling, at the pinned commit)
+      - name: naoqi-sim (its docker/ recipes and image tooling, at the pinned commit)
         uses: actions/checkout@v7
         with:
-          repository: funwithagents/nao-sim
-          ref: ${{ env.NAO_SIM_REF }}
-          path: nao-sim
+          repository: funwithagents/naoqi-sim
+          ref: ${{ env.NAOQI_SIM_REF }}
+          path: naoqi-sim
       - name: System packages (offscreen OpenGL, and a virtual display for the window entry)
         run: |
           sudo apt-get update
@@ -129,42 +129,42 @@ jobs:
           enable-cache: true
           cache-dependency-glob: |
             uv.lock
-            nao-sim/uv.lock
-      # nao-sim's images (NAOqi 2.1 and tts), saved with `docker save` in this repository's
-      # Actions cache, keyed on the nao-sim pin they are built from. On a miss, nao-sim fetches
+            naoqi-sim/uv.lock
+      # naoqi-sim's images (NAOqi 2.1 and tts), saved with `docker save` in this repository's
+      # Actions cache, keyed on the naoqi-sim pin they are built from. On a miss, naoqi-sim fetches
       # Aldebaran's files only to build them, as it does on a user's machine; the files are
       # never cached. The images contain Aldebaran's software: a cache only this repository's
       # workflows read, never a registry (specs/ci.md).
-      - name: nao-sim images (restore)
+      - name: naoqi-sim images (restore)
         id: images
         uses: actions/cache/restore@v6
         with:
-          path: ${{ runner.temp }}/nao-sim-images.tar
-          key: nao-sim-images-2.1-${{ env.NAO_SIM_REF }}
+          path: ${{ runner.temp }}/naoqi-sim-images.tar
+          key: naoqi-sim-images-2.1-${{ env.NAOQI_SIM_REF }}
       - name: Load the cached images
         if: steps.images.outputs.cache-hit == 'true'
-        run: docker load -i "$RUNNER_TEMP/nao-sim-images.tar"
-      - name: Build and verify the images (nao-sim fetch-and-build-images)
+        run: docker load -i "$RUNNER_TEMP/naoqi-sim-images.tar"
+      - name: Build and verify the images (naoqi-sim fetch-and-build-images)
         if: steps.images.outputs.cache-hit != 'true'
         run: |
-          uv run --project nao-sim --locked nao-sim fetch-and-build-images 2.1
-          docker save -o "$RUNNER_TEMP/nao-sim-images.tar" nao-sim/naoqi:2.1.4.13 nao-sim/tts:dev
+          uv run --project naoqi-sim --locked naoqi-sim fetch-and-build-images 2.1
+          docker save -o "$RUNNER_TEMP/naoqi-sim-images.tar" naoqi-sim/naoqi:2.1.4.13 naoqi-sim/tts:dev
       # Saved right after the build, not at the end of the job, so a failing live tier
       # doesn't build again on the next run.
-      - name: nao-sim images (save)
+      - name: naoqi-sim images (save)
         if: steps.images.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
-          path: ${{ runner.temp }}/nao-sim-images.tar
+          path: ${{ runner.temp }}/naoqi-sim-images.tar
           key: ${{ steps.images.outputs.cache-primary-key }}
       - name: Start NAOqi 2.1
-        run: docker compose -f nao-sim/docker/compose.yaml --profile 2.1 up -d --wait --no-build
+        run: docker compose -f naoqi-sim/docker/compose.yaml --profile 2.1 up -d --wait --no-build
       - name: Sync (against the lock)
         run: uv sync --locked
       - name: Live tier
         env:
           NAOQI_URL: tcp://127.0.0.1:9559
-          NAO_VIEWER_E2E_WINDOW: ${{ matrix.viewer == 'window' && '1' || '' }}
+          NAOQI_VIEWER_E2E_WINDOW: ${{ matrix.viewer == 'window' && '1' || '' }}
         # Warnings and errors print live, the viewer process's own among them. The window entry
         # runs under xvfb-run, which gives the viewer windows an X display.
         run: |
@@ -176,4 +176,4 @@ jobs:
           fi
       - name: NAOqi logs
         if: failure()
-        run: docker compose -f nao-sim/docker/compose.yaml --profile 2.1 logs --tail 300
+        run: docker compose -f naoqi-sim/docker/compose.yaml --profile 2.1 logs --tail 300

@@ -7,10 +7,15 @@ from dataclasses import dataclass, field
 import mujoco
 import pytest
 
-from nao_viewer import NaoViewerConfig, client
-from nao_viewer.model import NaoPose, load_world
-from nao_viewer.source import Sample, TargetInfo
-from nao_viewer.viewer import ATTRIBUTION, KEY_TOGGLE_STATUS, ViewerState, run_headless
+from naoqi_viewer import NaoqiViewerConfig, client
+from naoqi_viewer.model import NaoPose, load_world
+from naoqi_viewer.source import Sample, TargetInfo
+from naoqi_viewer.viewer import (
+    ATTRIBUTION,
+    KEY_TOGGLE_STATUS,
+    ViewerState,
+    run_headless,
+)
 
 UPRIGHT = ((0.0, 0.0, 0.3332), (1.0, 0.0, 0.0, 0.0))
 RIGHT_ARM_BODIES = {"RShoulder", "RBicep", "RElbow", "RForeArm", "r_wrist"}
@@ -97,11 +102,11 @@ def test_status_overlay_lines(world: mujoco.MjModel):
     state = ViewerState(world, source)
     assert status(state) == ("connecting\ndata age", "\nNO DATA")
 
-    source.info = TargetInfo("tcp://127.0.0.1:9559", "nao-sim", "0.3.0")
+    source.info = TargetInfo("tcp://127.0.0.1:9559", "naoqi-sim", "0.3.0")
     source.samples_per_second = 49.6
     source.push({}, age=0.04)
     left, right = status_lines(state)
-    assert left.splitlines() == ["nao-sim", "NAOqi", "rate", "data age"]
+    assert left.splitlines() == ["naoqi-sim", "NAOqi", "rate", "data age"]
     url, version, rate, age = right.splitlines()
     assert (url, version, rate) == ("tcp://127.0.0.1:9559", "0.3.0", "50 Hz")
     assert age.endswith(" ms") and 40 <= int(age.removesuffix(" ms")) < 500
@@ -226,8 +231,8 @@ def test_run_headless_poses_the_model_each_frame_until_stopped(world: mujoco.MjM
 def test_a_headless_viewer_process_does_not_load_the_window_stack():
     # With the environment launch() gives a headless viewer: on Linux, MuJoCo's default
     # backend is GLFW itself, which MUJOCO_GL=egl replaces.
-    headless = NaoViewerConfig(mode="sim", headless=True)
-    code = "import sys, nao_viewer.viewer_process; print(sorted(m for m in ('glfw', 'mujoco.viewer') if m in sys.modules))"
+    headless = NaoqiViewerConfig(mode="sim", headless=True)
+    code = "import sys, naoqi_viewer.viewer_process; print(sorted(m for m in ('glfw', 'mujoco.viewer') if m in sys.modules))"
     result = subprocess.run(
         [sys.executable, "-c", code],
         env=client._viewer_env(headless),

@@ -9,7 +9,7 @@ from typing import Literal
 import mujoco
 import numpy as np
 
-from nao_viewer import meshes
+from naoqi_viewer import meshes
 
 _log = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ def resolve_variant(variant: Variant = "auto") -> Literal["placeholder", "aldeba
     if variant == "aldebaran":
         if meshes.installed() is None:
             raise FileNotFoundError(
-                "Aldebaran's NAO meshes are not installed; run `nao-viewer fetch-meshes` first"
+                "Aldebaran's NAO meshes are not installed; run `naoqi-viewer fetch-meshes` first"
             )
         return "aldebaran"
     raise ValueError(

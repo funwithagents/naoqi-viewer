@@ -88,7 +88,7 @@ wheels = [
 ]
 
 [[package]]
-name = "nao-viewer"
+name = "naoqi-viewer"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

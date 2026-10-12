@@ -1,6 +1,6 @@
 """The real viewer process against a live NAOqi (needs NAOQI_URL).
 
-Viewers open headless unless NAO_VIEWER_E2E_WINDOW=1, which opens their windows (needs a display).
+Viewers open headless unless NAOQI_VIEWER_E2E_WINDOW=1, which opens their windows (needs a display).
 """
 
 import time
@@ -8,12 +8,12 @@ import time
 import numpy as np
 from support import require_env, require_window, window_requested
 
-from nao_viewer import NaoViewer, NaoViewerConfig
-from nao_viewer.source import connect
+from naoqi_viewer import NaoqiViewer, NaoqiViewerConfig
+from naoqi_viewer.source import connect
 
 
 def _head_can_move(url: str) -> bool:
-    """Moving the head is fine on nao-sim or a virtual robot, never on a real one."""
+    """Moving the head is fine on naoqi-sim or a virtual robot, never on a real one."""
     session = connect(url)  # retries: the libqi 3 wheels fail some connects at once
     try:
         return "ALSystem" not in {service["name"] for service in session.services()}
@@ -33,7 +33,7 @@ def _move_head(url: str, yaw: float) -> None:
 
 def test_sim_mode_serves_real_camera_frames():
     url = require_env("NAOQI_URL")
-    config = NaoViewerConfig.from_dict(
+    config = NaoqiViewerConfig.from_dict(
         {
             "mode": "sim",
             "headless": not window_requested(),
@@ -41,7 +41,7 @@ def test_sim_mode_serves_real_camera_frames():
             "world": {"scene": "table", "variant": "placeholder"},
         }
     )
-    with NaoViewer(config) as viewer:
+    with NaoqiViewer(config) as viewer:
         deadline = time.monotonic() + 10
         while viewer.status().data_age is None:
             assert time.monotonic() < deadline, "no pose from NAOqi"
@@ -70,6 +70,6 @@ def test_sim_mode_serves_real_camera_frames():
 def test_mirror_mode_opens_and_reports_status():
     url = require_env("NAOQI_URL")
     require_window()
-    with NaoViewer.from_dict({"naoqi": {"url": url}}) as viewer:
+    with NaoqiViewer.from_dict({"naoqi": {"url": url}}) as viewer:
         assert viewer.config.mode == "mirror"
         assert viewer.status().url == url

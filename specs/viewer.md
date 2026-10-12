@@ -1,6 +1,6 @@
 ---
 code:
-  - src/nao_viewer/viewer.py
+  - src/naoqi_viewer/viewer.py
 tests:
   - tests/test_viewer.py
 ---
@@ -21,8 +21,8 @@ The window: it poses the model from a [pose source](source.md) and draws it, wit
 - On macOS, `launch_passive` must run under `mjpython`. [api.md](api.md) starts the viewer process with it, and `viewer.py` assumes it is already there.
 - Both side panels start hidden; the standard MuJoCo key toggles them.
 - The default camera tracks the `torso` body, so the robot stays in view when it walks. Double-click or the usual MuJoCo keys switch to a free camera.
-- **Window title**: the passive viewer has no title argument; it titles its window `MuJoCo : <model name>`. The title is therefore set when the world is compiled, through `load_world(..., name=...)` ([model.md](model.md)); [api.md](api.md) passes `nao-viewer · <mode> · <url>`.
-- **Keys**: every letter and digit is already a MuJoCo viewer shortcut, and keys reach both MuJoCo and nao-viewer's `key_callback`, so nao-viewer only uses function keys MuJoCo leaves free (F8 and up).
+- **Window title**: the passive viewer has no title argument; it titles its window `MuJoCo : <model name>`. The title is therefore set when the world is compiled, through `load_world(..., name=...)` ([model.md](model.md)); [api.md](api.md) passes `naoqi-viewer · <mode> · <url>`.
+- **Keys**: every letter and digit is already a MuJoCo viewer shortcut, and keys reach both MuJoCo and naoqi-viewer's `key_callback`, so naoqi-viewer only uses function keys MuJoCo leaves free (F8 and up).
 
 ### Loop
 
@@ -45,7 +45,7 @@ Steps 1 and 2 live in a `ViewerState` class (posing, overlay texts, ghost geoms,
 
 ### Status overlay (top-left)
 
-- Lines: target and URL (`nao-sim tcp://127.0.0.1:9559`), NAOqi version, update rate (`source.rate()`, Hz), and data age in ms. Before the first connection (`source.info` is `None`) the first line reads `connecting tcp://…`.
+- Lines: target and URL (`naoqi-sim tcp://127.0.0.1:9559`), NAOqi version, update rate (`source.rate()`, Hz), and data age in ms. Before the first connection (`source.info` is `None`) the first line reads `connecting tcp://…`.
 - When the data age passes 500 ms, or before the first sample, the data-age line reads `STALE` (or `NO DATA`). The robot stays in its last pose.
 - Shown with `handle.set_texts`, which takes plain text with no per-line color, so the `STALE` text is the stale marker. `F9` toggles the overlay.
 
@@ -58,7 +58,7 @@ Steps 1 and 2 live in a `ViewerState` class (posing, overlay texts, ghost geoms,
 - a joint lagging behind during a fast movement;
 - a weak or overheating motor that can't hold its target.
 
-It is off by default: it costs one more NAOqi call per poll, and when nothing is wrong it shows nothing. It is turned on with `"ghost": true` in the viewer's config ([config.md](config.md)), for `NaoViewer` ([api.md](api.md)) as for `nao-viewer view --config` ([cli.md](cli.md)).
+It is off by default: it costs one more NAOqi call per poll, and when nothing is wrong it shows nothing. It is turned on with `"ghost": true` in the viewer's config ([config.md](config.md)), for `NaoqiViewer` ([api.md](api.md)) as for `naoqi-viewer view --config` ([cli.md](cli.md)).
 
 **How it is drawn.**
 
@@ -69,7 +69,7 @@ It is off by default: it costs one more NAOqi call per poll, and when nothing is
 
 - Text: `NAO meshes © Aldebaran, CC BY-NC-ND 4.0`.
 - Shown whenever the world is loaded with Aldebaran's meshes (`variant` `aldebaran`, [model.md](model.md)), passed as `attribution`; never shown with the placeholder visuals. It has no toggle: the license asks for attribution, and it takes little room.
-- nao-viewer records no video in v1, so there is no recording case to handle.
+- naoqi-viewer records no video in v1, so there is no recording case to handle.
 
 ## Open questions
 

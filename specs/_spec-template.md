@@ -1,6 +1,6 @@
 ---
 code:
-  - src/nao_viewer/example.py
+  - src/naoqi_viewer/example.py
 tests:
   - tests/test_example.py
 ---

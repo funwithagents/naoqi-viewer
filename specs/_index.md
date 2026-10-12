@@ -1,6 +1,6 @@
-# nao-viewer
+# naoqi-viewer
 
-nao-viewer is the MuJoCo window for NAO, one of the three packages of the NAO toolkit (nao-bridge, nao-sim, nao-viewer). Its core idea is a kinematic mirror, not a physics simulation: it reads joint angles and the torso pose from any NAOqi endpoint over qi, writes them into the model's `qpos`, runs `mj_kinematics` and renders. It is a Python library: a `NaoViewer`, built from a JSON-friendly `NaoViewerConfig`, starts the viewer in its own process with `launch()` (where MuJoCo's window and `mjpython` live) and controls it. The same viewer watches a real robot, or acts as nao-sim's simulated world, where nao-sim passes a scene and pulls head-camera frames to inject into `ALVideoDevice`. nao-viewer also owns the NAO model: one MJCF, converted once from the BSD-3 URDF and committed, ships in the package with styled placeholder visuals of our own. Aldebaran's meshes replace those visuals only on the user's machine, after a license-gated `fetch-meshes`, because they must never enter the repository or a package. nao-viewer depends on libqi alone, never on nao-bridge or nao-sim, so the dependency chain stays one-way.
+naoqi-viewer is the MuJoCo window for NAO, one of the three packages of the NAO toolkit (naoqi-bridge, naoqi-sim, naoqi-viewer). Its core idea is a kinematic mirror, not a physics simulation: it reads joint angles and the torso pose from any NAOqi endpoint over qi, writes them into the model's `qpos`, runs `mj_kinematics` and renders. It is a Python library: a `NaoqiViewer`, built from a JSON-friendly `NaoqiViewerConfig`, starts the viewer in its own process with `launch()` (where MuJoCo's window and `mjpython` live) and controls it. The same viewer watches a real robot, or acts as naoqi-sim's simulated world, where naoqi-sim passes a scene and pulls head-camera frames to inject into `ALVideoDevice`. naoqi-viewer also owns the NAO model: one MJCF, converted once from the BSD-3 URDF and committed, ships in the package with styled placeholder visuals of our own. Aldebaran's meshes replace those visuals only on the user's machine, after a license-gated `fetch-meshes`, because they must never enter the repository or a package. naoqi-viewer depends on libqi alone, never on naoqi-bridge or naoqi-sim, so the dependency chain stays one-way.
 
 The big picture (goals, scope, architecture, status, licensing) is in [_overview.md](_overview.md).
 
@@ -11,16 +11,16 @@ The big picture (goals, scope, architecture, status, licensing) is in [_overview
 | Spec | Description | Status |
 |---|---|---|
 | [project.md](project.md) | Project structure and tooling: Python version, packaging with uv, layout conventions | Implemented |
-| [testing.md](testing.md) | Testing strategy: two-tier `tests/`/`tests-e2e/` split, in-process mock NAOqi, a real headless viewer in the fast tier, live tier gated on `NAOQI_URL` and headless unless `NAO_VIEWER_E2E_WINDOW` | Implemented |
+| [testing.md](testing.md) | Testing strategy: two-tier `tests/`/`tests-e2e/` split, in-process mock NAOqi, a real headless viewer in the fast tier, live tier gated on `NAOQI_URL` and headless unless `NAOQI_VIEWER_E2E_WINDOW` | Implemented |
 | [model.md](model.md) | The NAO MJCF model: committed `nao.xml` from the URDF, joints, couplings, sensors, cameras, effector sites, placeholder visuals; scenes; `NaoPose` and `PoseWriter` | Implemented |
-| [meshes.md](meshes.md) | `fetch-meshes`: license prompt, then nao-meshes' encrypted OBJ/PNG archive unlocked locally, and its removal; and loading Aldebaran's meshes in place of the placeholder visuals | Implemented |
+| [meshes.md](meshes.md) | `fetch-meshes`: license prompt, then naoqi-meshes' encrypted OBJ/PNG archive unlocked locally, and its removal; and loading Aldebaran's meshes in place of the placeholder visuals | Implemented |
 | [source.md](source.md) | Pose sources: `connect()` with retries, `NaoqiSource` polling NAOqi at 50 Hz with reconnect and target identification | Implemented |
 | [viewer.md](viewer.md) | The render loop on `mujoco.viewer.launch_passive`: pose → `mj_kinematics` at 60 Hz, status overlay, ghost, attribution; the windowless headless loop | Implemented |
-| [config.md](config.md) | `NaoViewerConfig`: mode, headless, NAOqi, world, ghost; `from_dict`/`from_json`/`from_json_file`, `to_dict`, `ConfigError` naming the key; example files | Implemented |
-| [api.md](api.md) | Public API: `NaoViewer(config)` with `launch()` starting the viewer in its own process (`mjpython` on macOS), `camera_frame`, `status`, `wait`, `close`; headless sim with offscreen rendering (Mesa's EGL on Linux); loopback protocol; bundled scenes | Implemented |
+| [config.md](config.md) | `NaoqiViewerConfig`: mode, headless, NAOqi, world, ghost; `from_dict`/`from_json`/`from_json_file`, `to_dict`, `ConfigError` naming the key; example files | Implemented |
+| [api.md](api.md) | Public API: `NaoqiViewer(config)` with `launch()` starting the viewer in its own process (`mjpython` on macOS), `camera_frame`, `status`, `wait`, `close`; headless sim with offscreen rendering (Mesa's EGL on Linux); loopback protocol; bundled scenes | Implemented |
 | [check_model.md](check_model.md) | `check-model`: forward-kinematics cross-check against NAOqi, 2 mm / 1° | Implemented |
-| [ci.md](ci.md) | Continuous integration: `check`, `fast-tier` and `e2e-nao-sim` on GitHub's runners: the fast tier, the live tier headless and windowed against a real NAOqi 2.1 built by nao-sim at a pinned commit, its images cached | Implemented |
-| [cli.md](cli.md) | Thin `nao-viewer` command: `view --config`, `check-model`, `fetch-meshes` | Implemented |
+| [ci.md](ci.md) | Continuous integration: `check`, `fast-tier` and `e2e-naoqi-sim` on GitHub's runners: the fast tier, the live tier headless and windowed against a real NAOqi 2.1 built by naoqi-sim at a pinned commit, its images cached | Implemented |
+| [cli.md](cli.md) | Thin `naoqi-viewer` command: `view --config`, `check-model`, `fetch-meshes` | Implemented |
 
 Each spec also opens with a YAML **frontmatter** block declaring the `code:` and `tests:` files it governs — the spec → code/tests mapping the spec-drift checks use to scope what they compare. Keep it current when files move, and see [AGENTS.md](../AGENTS.md) ("Spec frontmatter") for the full convention.
 

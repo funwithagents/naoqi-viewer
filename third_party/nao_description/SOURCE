@@ -3,5 +3,5 @@ Commit:     67476469a1371b00b17538eb6ea336367ece7d44
 Path:       nao_description/urdf/naoV50_generated_urdf/nao.urdf
 License:    BSD-3-Clause (LICENSE, from the repository's LICENSE.txt)
 
-nao.urdf is the upstream file, unmodified. src/nao_viewer/models/nao.xml was converted
+nao.urdf is the upstream file, unmodified. src/naoqi_viewer/models/nao.xml was converted
 from it once and is maintained by hand (see specs/model.md).

@@ -1,7 +1,7 @@
 """A mock NAOqi: Python qi services served from a standalone qi.Session on loopback.
 
 Code under test connects to `MockNaoqi.url` exactly as it would to a robot, so the qi path is
-exercised for real. It implements only what nao-viewer calls (specs/testing.md, "Mock NAOqi").
+exercised for real. It implements only what naoqi-viewer calls (specs/testing.md, "Mock NAOqi").
 """
 
 import threading
@@ -12,9 +12,9 @@ import mujoco
 import numpy as np
 import qi
 
-from nao_viewer.model import JOINT_NAMES, NaoPose, PoseWriter, load_world
+from naoqi_viewer.model import JOINT_NAMES, NaoPose, PoseWriter, load_world
 
-Target = Literal["virtual", "nao-sim", "real"]
+Target = Literal["virtual", "naoqi-sim", "real"]
 
 FRAME_TORSO = 0
 FRAME_WORLD = 1
@@ -83,7 +83,7 @@ class _Memory:
         self._mock._call("ALMemory", "insertData", key, value)
 
 
-class _NaoSim:
+class _NaoqiSim:
     def ping(self) -> bool:
         return True
 
@@ -134,12 +134,12 @@ class MockNaoqi:
         )
         session.registerService("ALMotion", _Motion(self))
         session.registerService("ALMemory", _Memory(self))
-        if self.target == "nao-sim":
+        if self.target == "naoqi-sim":
             with self._lock:
-                # nao-sim publishes its own version too: identification must not read it.
-                self._memory["NaoSim/Version"] = "0.0.1"
-                self._memory["NaoSim/NaoqiVersion"] = self.version
-            session.registerService("NaoSim", _NaoSim())
+                # naoqi-sim publishes its own version too: identification must not read it.
+                self._memory["NaoqiSim/Version"] = "0.0.1"
+                self._memory["NaoqiSim/NaoqiVersion"] = self.version
+            session.registerService("NaoqiSim", _NaoqiSim())
         elif self.target == "real":
             session.registerService("ALSystem", _System(self.version))
         self._session = session

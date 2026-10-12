@@ -1,11 +1,11 @@
 <!--
-  NAO V5 (H25) for nao-viewer.
+  NAO V5 (H25) for naoqi-viewer.
 
   Converted once from the ros-naoqi/nao_robot URDF (BSD-3-Clause; see
   third_party/nao_description/SOURCE and THIRD_PARTY_NOTICES.md), then maintained by hand:
   this file is the source of truth (specs/model.md). Kinematics, limits, masses and inertias
   come from the URDF. Collision geoms, placeholder visuals, sites, cameras, actuators and
-  sensors are nao-viewer's own, under MIT.
+  sensors are naoqi-viewer's own, under MIT.
 
   Geom groups: 1 = visuals (class nao_visual, swapped for Aldebaran's meshes when installed),
   3 = collision (hidden). Site group 4 = sensor and effector sites (hidden).

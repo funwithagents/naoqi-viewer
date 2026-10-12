@@ -1,7 +1,7 @@
 [project]
-name = "nao-viewer"
+name = "naoqi-viewer"
 version = "0.1.0"
-description = "MuJoCo viewer for NAO: mirrors any NAOqi robot or renders nao-sim's simulated world, with the NAO model and a license-gated mesh fetcher."
+description = "MuJoCo viewer for NAO: mirrors any NAOqi robot or renders naoqi-sim's simulated world, with the NAO model and a license-gated mesh fetcher."
 readme = "README.md"
 authors = [
     { name = "Thibault Hervier", email = "thibault@fr2g.io" }
@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-nao-viewer = "nao_viewer.cli:main"
+naoqi-viewer = "naoqi_viewer.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.29,<0.12.0"]

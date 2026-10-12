@@ -1,7 +1,7 @@
-"""Aldebaran's meshes, from a real `nao-viewer fetch-meshes` install, loaded and rendered.
+"""Aldebaran's meshes, from a real `naoqi-viewer fetch-meshes` install, loaded and rendered.
 
 Needs no NAOqi: it skips when the meshes aren't installed (fails with
-NAO_VIEWER_REQUIRE_MESHES set, as CI's meshes job does).
+NAOQI_VIEWER_REQUIRE_MESHES set, as CI's meshes job does).
 """
 
 import os
@@ -11,8 +11,8 @@ import numpy as np
 import pytest
 from support import require_meshes
 
-from nao_viewer import meshes
-from nao_viewer.model import NaoPose, PoseWriter, load_world
+from naoqi_viewer import meshes
+from naoqi_viewer.model import NaoPose, PoseWriter, load_world
 
 STANDING = NaoPose(
     angles={"LShoulderPitch": 1.4, "RShoulderPitch": 1.4, "LHand": 0.5, "RHand": 0.5},
@@ -31,7 +31,7 @@ def render(model: mujoco.MjModel) -> np.ndarray:
     try:
         renderer = mujoco.Renderer(model, 240, 320)
     except Exception as exc:  # noqa: BLE001
-        if os.environ.get("NAO_VIEWER_REQUIRE_OFFSCREEN_GL"):
+        if os.environ.get("NAOQI_VIEWER_REQUIRE_OFFSCREEN_GL"):
             pytest.fail(f"offscreen OpenGL is required on this run: {exc}")
         pytest.skip(f"no OpenGL for offscreen rendering here: {exc}")
     try:

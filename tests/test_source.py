@@ -7,9 +7,9 @@ from contextlib import closing
 import pytest
 from mock_naoqi import MockNaoqi, Target
 
-from nao_viewer import source
-from nao_viewer.model import JOINT_NAMES
-from nao_viewer.source import NaoqiSource, Sample, connect, normalize_url
+from naoqi_viewer import source
+from naoqi_viewer.model import JOINT_NAMES
+from naoqi_viewer.source import NaoqiSource, Sample, connect, normalize_url
 
 TILTED_TORSO = (1, 0, 0, 0.2, 0, 1, 0, -0.1, 0, 0, 1, 0.3, 0, 0, 0, 1)
 
@@ -91,7 +91,7 @@ def test_unknown_body_names_are_left_out_and_logged_once(
     mock = MockNaoqi(body_names=(*JOINT_NAMES, "LFoo")).start()
     try:
         with (
-            caplog.at_level(logging.INFO, logger="nao_viewer.source"),
+            caplog.at_level(logging.INFO, logger="naoqi_viewer.source"),
             closing(NaoqiSource(mock.url)) as src,
         ):
             first_sample(src)
@@ -106,7 +106,7 @@ def test_unknown_body_names_are_left_out_and_logged_once(
     ("target", "version", "expected_version"),
     [
         ("virtual", "2.1.4.13", None),
-        ("nao-sim", "2.8.7.4", "2.8.7.4"),
+        ("naoqi-sim", "2.8.7.4", "2.8.7.4"),
         ("real", "2.8.6.23", "2.8.6.23"),
     ],
 )
@@ -168,7 +168,7 @@ def test_reconnects_after_naoqi_restarts_and_reidentifies(
         time.sleep(0.2)
         assert latest(src).seq - before.seq < 15
 
-        mock.target = "nao-sim"
+        mock.target = "naoqi-sim"
         mock.version = "0.4.0"
         mock.restart()
         mock.set_pose({"LElbowRoll": -1.0})
@@ -177,7 +177,7 @@ def test_reconnects_after_naoqi_restarts_and_reidentifies(
             timeout=10,
         )
         assert src.info is not None and (src.info.target, src.info.naoqi_version) == (
-            "nao-sim",
+            "naoqi-sim",
             "0.4.0",
         )
 

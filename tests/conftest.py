@@ -11,7 +11,7 @@ from collections.abc import Iterator
 import pytest
 from mock_naoqi import MockNaoqi
 
-from nao_viewer import meshes
+from naoqi_viewer import meshes
 
 
 @pytest.fixture(autouse=True, scope="session")

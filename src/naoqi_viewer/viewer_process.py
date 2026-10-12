@@ -1,6 +1,6 @@
-"""The viewer process: `python -m nao_viewer.viewer_process <config JSON>` (on macOS, under mjpython).
+"""The viewer process: `python -m naoqi_viewer.viewer_process <config JSON>` (on macOS, under mjpython).
 
-Started by nao_viewer.launch(). It loads the world, polls NAOqi, owns the window (or, headless,
+Started by naoqi_viewer.launch(). It loads the world, polls NAOqi, owns the window (or, headless,
 renders offscreen only), and answers its caller over one loopback connection (protocol.py). It
 exits when that connection closes, when the window is closed, or on `stop`.
 """
@@ -21,11 +21,11 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from nao_viewer import protocol
-from nao_viewer.config import ConfigError, NaoViewerConfig, is_scene_path
-from nao_viewer.model import load_world, resolve_variant
-from nao_viewer.source import NaoqiSource, PoseSource, Sample
-from nao_viewer.viewer import ATTRIBUTION, run, run_headless
+from naoqi_viewer import protocol
+from naoqi_viewer.config import ConfigError, NaoqiViewerConfig, is_scene_path
+from naoqi_viewer.model import load_world, resolve_variant
+from naoqi_viewer.source import NaoqiSource, PoseSource, Sample
+from naoqi_viewer.viewer import ATTRIBUTION, run, run_headless
 
 _log = logging.getLogger(__name__)
 
@@ -53,9 +53,9 @@ def _check_offscreen(model: mujoco.MjModel, renderer: "OffscreenRenderer") -> No
     renderer(model, mujoco.MjData(model), CAMERAS["top"], 640, 480)
 
 
-def _nao_viewer_version() -> str:
+def _naoqi_viewer_version() -> str:
     try:
-        return package_version("nao-viewer")
+        return package_version("naoqi-viewer")
     except PackageNotFoundError:
         return "unknown"
 
@@ -158,7 +158,7 @@ class RequestServer:
         if op == "hello":
             return ok(
                 protocol=protocol.PROTOCOL,
-                nao_viewer=_nao_viewer_version(),
+                naoqi_viewer=_naoqi_viewer_version(),
                 mode=self._mode,
             ), b""
         if op == "status":
@@ -255,7 +255,7 @@ class RequestServer:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run a viewer from its config (`NaoViewerConfig.to_dict()` as JSON, the one argument)."""
+    """Run a viewer from its config (`NaoqiViewerConfig.to_dict()` as JSON, the one argument)."""
     args = sys.argv[1:] if argv is None else argv
     logging.basicConfig(
         stream=sys.stderr,
@@ -268,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        config = NaoViewerConfig.from_json(args[0])
+        config = NaoqiViewerConfig.from_json(args[0])
     except ConfigError as exc:
         return fail(f"invalid viewer config: {exc}")
     mode, url, scene = config.mode, config.naoqi.url, config.world.scene
@@ -276,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
         return fail(f"scene file not found: {scene}")
     try:
         variant = resolve_variant(config.world.variant)
-        model = load_world(scene, variant, name=f"nao-viewer · {mode} · {url}")
+        model = load_world(scene, variant, name=f"naoqi-viewer · {mode} · {url}")
     except (ValueError, FileNotFoundError) as exc:
         return fail(str(exc))
 

@@ -1,11 +1,11 @@
-"""Run `nao-viewer fetch-meshes` under a pseudo-terminal and type `yes`, as CI's meshes job does.
+"""Run `naoqi-viewer fetch-meshes` under a pseudo-terminal and type `yes`, as CI's meshes job does.
 
 fetch-meshes has no flag or variable that skips its license prompt, and refuses a stdin
 that is not a terminal. CI therefore answers it like a person would: this script gives the
 command a terminal, waits for the prompt, and types `yes`. Running the job is the
 maintainer accepting the license for CI (specs/ci.md).
 
-Usage: python scripts/ci_fetch_meshes.py [-- COMMAND...]   (default: nao-viewer fetch-meshes)
+Usage: python scripts/ci_fetch_meshes.py [-- COMMAND...]   (default: naoqi-viewer fetch-meshes)
 """
 
 import os
@@ -60,7 +60,9 @@ def run(command: list[str]) -> int:
 
 def main(argv: list[str]) -> int:
     command = (
-        argv[argv.index("--") + 1 :] if "--" in argv else ["nao-viewer", "fetch-meshes"]
+        argv[argv.index("--") + 1 :]
+        if "--" in argv
+        else ["naoqi-viewer", "fetch-meshes"]
     )
     return run(command)
 

@@ -19,12 +19,12 @@ from mesh_archive import (
     zip_encrypted,
 )
 
-from nao_viewer import meshes
-from nao_viewer.model import JOINT_NAMES, NaoPose, PoseWriter
+from naoqi_viewer import meshes
+from naoqi_viewer.model import JOINT_NAMES, NaoPose, PoseWriter
 
 REPO = Path(__file__).resolve().parent.parent
 URDF = REPO / "third_party" / "nao_description" / "nao.urdf"
-NAO_XML = REPO / "src" / "nao_viewer" / "models" / "nao.xml"
+NAO_XML = REPO / "src" / "naoqi_viewer" / "models" / "nao.xml"
 
 
 class Terminal(io.StringIO):
@@ -182,7 +182,7 @@ def test_a_local_archive_is_used_and_checked(release: FakeRelease):
 
 def test_no_pinned_release_refuses(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(meshes, "RELEASE", None)
-    with pytest.raises(meshes.MeshesError, match="no nao-meshes release is pinned"):
+    with pytest.raises(meshes.MeshesError, match="no naoqi-meshes release is pinned"):
         fetch(Untypeable())
 
 
@@ -242,7 +242,7 @@ def test_an_archive_entry_outside_its_folder_is_refused(
     evil = tmp_path / "evil.zip"
     shutil.copy(release.archive_path, evil)
     with zipfile.ZipFile(evil, "a") as archive:
-        archive.writestr("escape.txt", "outside nao-meshes-V40-r<N>/")
+        archive.writestr("escape.txt", "outside naoqi-meshes-V40-r<N>/")
     _pin(monkeypatch, release, evil.read_bytes())
     with pytest.raises(meshes.MeshesError, match="unexpected archive entry"):
         fetch(Terminal("yes\n"))
@@ -348,7 +348,7 @@ def test_no_mesh_texture_installer_or_archive_is_tracked():
 
 
 def test_the_package_holds_no_mesh_texture_or_archive():
-    package = REPO / "src" / "nao_viewer"
+    package = REPO / "src" / "naoqi_viewer"
     found = [p for p in package.rglob("*") if p.suffix.lower() in _ASSET_SUFFIXES]
     assert found == []
 

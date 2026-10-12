@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 from mock_naoqi import MockNaoqi
 
-from nao_viewer import check_model
-from nao_viewer.check_model import EFFECTORS, CheckReport, TargetRefused
-from nao_viewer.model import JOINT_NAMES, load_world
+from naoqi_viewer import check_model
+from naoqi_viewer.check_model import EFFECTORS, CheckReport, TargetRefused
+from naoqi_viewer.model import JOINT_NAMES, load_world
 
 
 @pytest.fixture
@@ -160,14 +160,14 @@ def test_a_real_robot_is_checked_with_allow_real(real_robot: MockNaoqi):
     assert (report.target, report.naoqi_version) == ("real", "2.8.7.4")
 
 
-def test_nao_sim_is_accepted():
-    mock = MockNaoqi(target="nao-sim", version="0.3.0").start()
+def test_naoqi_sim_is_accepted():
+    mock = MockNaoqi(target="naoqi-sim", version="0.3.0").start()
     try:
         report = check_model.run(mock.url, samples=2, seed=10)
     finally:
         mock.close()
     assert report.passed
-    assert report.target == "nao-sim"
+    assert report.target == "naoqi-sim"
 
 
 @pytest.mark.parametrize(

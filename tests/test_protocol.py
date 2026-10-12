@@ -3,7 +3,7 @@ import threading
 
 import pytest
 
-from nao_viewer import protocol
+from naoqi_viewer import protocol
 
 
 def test_messages_round_trip_with_and_without_payload():
@@ -50,4 +50,4 @@ def test_a_closed_connection_is_eof_even_mid_message():
 
 
 def test_ready_line():
-    assert protocol.ready_line(51234) == "NAO_VIEWER_READY port=51234 protocol=1"
+    assert protocol.ready_line(51234) == "NAOQI_VIEWER_READY port=51234 protocol=1"

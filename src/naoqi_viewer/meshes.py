@@ -1,6 +1,6 @@
-"""Aldebaran's NAO meshes: the license-gated fetch of nao-meshes' archive, and loading them.
+"""Aldebaran's NAO meshes: the license-gated fetch of naoqi-meshes' archive, and loading them.
 
-The meshes are CC BY-NC-ND 4.0 and never ship with nao-viewer. funwithagents/nao-meshes
+The meshes are CC BY-NC-ND 4.0 and never ship with naoqi-viewer. funwithagents/naoqi-meshes
 publishes them converted to OBJ and PNG, in an encrypted zip that `fetch` unlocks only
 after the user types `yes`. Everything lands in the user data directory, never in the tree.
 """
@@ -21,18 +21,18 @@ from typing import Any, TextIO
 import mujoco
 import platformdirs
 
-# The pinned nao-meshes release (tag r<N>) of the V40 meshes, the ones the V5 URDF uses.
+# The pinned naoqi-meshes release (tag r<N>) of the V40 meshes, the ones the V5 URDF uses.
 # Releases are immutable: a new one reaches users only by bumping these two pins.
 MESH_SET = "V40"
 RELEASE: str | None = "r1"
 ARCHIVE_SHA256: str | None = (
-    "583a2bdc75663118ff1b1b41038df913afcb35de55c2cf21d4ce22b83131c3ef"
+    "905c12effaf6daa83947b7625d89b7bf82558b5052d197e96aec1c4684be8371"
 )
 # The CC BY-NC-ND 4.0 text, byte for byte ros-naoqi/nao_meshes's LICENSE.
 LICENSE_SHA256 = "993af1e3328c63ad28770c756d6133fcf2f76d5e48c4a0bf6720057b3d872310"
 # A gate, not a secret: the archive is opened only after the user's typed `yes`.
-_PASSWORD = b"nao-meshes:cc-by-nc-nd-4.0:accepted"
-_REPOSITORY = "https://github.com/funwithagents/nao-meshes"
+_PASSWORD = b"naoqi-meshes:cc-by-nc-nd-4.0:accepted"
+_REPOSITORY = "https://github.com/funwithagents/naoqi-meshes"
 MANIFEST_FORMAT = 1
 
 _TABLE_PATH = Path(__file__).parent / "models" / "aldebaran_visuals.json"
@@ -74,12 +74,12 @@ def visual_table() -> list[Visual]:
 
 def data_dir() -> Path:
     """Where every release is installed: <user data dir>/meshes."""
-    return Path(platformdirs.user_data_dir("nao-viewer")) / "meshes"
+    return Path(platformdirs.user_data_dir("naoqi-viewer")) / "meshes"
 
 
 def archive_name(release: str) -> str:
-    """The archive's stem, which is also its top folder: nao-meshes-V40-r1."""
-    return f"nao-meshes-{MESH_SET}-{release}"
+    """The archive's stem, which is also its top folder: naoqi-meshes-V40-r1."""
+    return f"naoqi-meshes-{MESH_SET}-{release}"
 
 
 def install_dir(release: str) -> Path:
@@ -104,7 +104,7 @@ def load_manifest(directory: Path) -> dict[str, Any]:
     if manifest.get("format") != MANIFEST_FORMAT:
         raise MeshesError(
             f"manifest format {manifest.get('format')!r} is not {MANIFEST_FORMAT}; "
-            "this nao-viewer can't read that nao-meshes release"
+            "this naoqi-viewer can't read that naoqi-meshes release"
         )
     missing = sorted({v.mesh for v in visual_table()} - set(manifest["meshes"]))
     if missing:
@@ -167,11 +167,11 @@ def _sha256(data: bytes) -> str:
 
 def _notice(release: str) -> str:
     return (
-        f"nao-viewer will download Aldebaran's NAO meshes ({archive_name(release)}) from\n"
+        f"naoqi-viewer will download Aldebaran's NAO meshes ({archive_name(release)}) from\n"
         f"  {archive_url(release)}\n"
         "They are Aldebaran's work, licensed under Creative Commons\n"
         "Attribution-NonCommercial-NoDerivatives 4.0 (CC BY-NC-ND 4.0): NON-COMMERCIAL use only.\n"
-        "nao-viewer's MIT license does not cover them. The license text follows.\n"
+        "naoqi-viewer's MIT license does not cover them. The license text follows.\n"
     )
 
 
@@ -188,7 +188,7 @@ def _accept(stdin: TextIO, stdout: TextIO) -> None:
 
 
 def _unlock(data: bytes, release: str, into: Path) -> None:
-    """Extract the archive's top folder (nao-meshes-V40-r1/) into `into`, refusing escapes."""
+    """Extract the archive's top folder (naoqi-meshes-V40-r1/) into `into`, refusing escapes."""
     root = PurePosixPath(archive_name(release))
     target = into.resolve()
     with tempfile.TemporaryFile() as raw:
@@ -228,7 +228,7 @@ def fetch(
     release = RELEASE
     if release is None or ARCHIVE_SHA256 is None:
         raise MeshesError(
-            "no nao-meshes release is pinned in this nao-viewer yet; the meshes can't be fetched"
+            "no naoqi-meshes release is pinned in this naoqi-viewer yet; the meshes can't be fetched"
         )
     present = installed(release)
     if present is not None and not force:
@@ -260,7 +260,7 @@ def fetch(
             "release": release,
             "license_sha256": LICENSE_SHA256,
             "archive_sha256": archive_sha256,
-            "nao_viewer_version": importlib.metadata.version("nao-viewer"),
+            "naoqi_viewer_version": importlib.metadata.version("naoqi-viewer"),
         }
         (staging / "ACCEPTANCE.json").write_text(json.dumps(accepted, indent=2) + "\n")
         final = install_dir(release)

@@ -1,7 +1,7 @@
-"""A nao-meshes-shaped archive built at test time from shapes of our own (no Aldebaran file).
+"""A naoqi-meshes-shaped archive built at test time from shapes of our own (no Aldebaran file).
 
 The archive follows the release contract in specs/meshes.md: an encrypted zip holding
-nao-meshes-V40-r<N>/ with manifest.json, meshes/*.obj and textures/*.png. Every mesh of
+naoqi-meshes-V40-r<N>/ with manifest.json, meshes/*.obj and textures/*.png. Every mesh of
 the visual table gets a textured tetrahedron, and the head a second, flat-colored part.
 """
 
@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from nao_viewer import meshes
+from naoqi_viewer import meshes
 
 LICENSE_TEXT = b"Test license: CC BY-NC-ND 4.0 stand-in.\n"
 
@@ -66,7 +66,7 @@ def png(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
 
 
 def write_release_tree(root: Path, release: str) -> Path:
-    """Write the unencrypted nao-meshes-V40-r<N>/ folder under `root`; returns it."""
+    """Write the unencrypted naoqi-meshes-V40-r<N>/ folder under `root`; returns it."""
     folder = root / meshes.archive_name(release)
     (folder / "meshes").mkdir(parents=True)
     (folder / "textures").mkdir()
@@ -100,7 +100,7 @@ def write_release_tree(root: Path, release: str) -> Path:
 
 
 def zip_encrypted(source_root: Path, folder_name: str, out: Path) -> bytes:
-    """Zip `source_root/folder_name` with ZipCrypto under nao-viewer's password."""
+    """Zip `source_root/folder_name` with ZipCrypto under naoqi-viewer's password."""
     if shutil.which("zip") is None:
         pytest.skip("the zip command is needed to build an encrypted test archive")
     password = meshes._PASSWORD.decode()
