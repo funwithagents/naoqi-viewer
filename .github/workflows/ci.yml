@@ -26,7 +26,7 @@ env:
   # A virtual X display, and Mesa's GLX for MuJoCo's window (GLFW), for the windowed live run.
   APT_WINDOW: xvfb xauth libgl1 libglx-mesa0
   # The naoqi-sim commit whose docker/ recipes build the live job's NAOqi; bumped on purpose.
-  NAOQI_SIM_REF: d4cb4e82f947e09b352789e3134ae630f06d5e84
+  NAOQI_SIM_REF: 8ca438d071e9332caf9a4c934b90358be6851f18
 
 jobs:
   check:
