@@ -1,8 +1,9 @@
 import logging
+import socket
 import threading
 import time
-from collections.abc import Callable
-from contextlib import closing
+from collections.abc import Callable, Iterator
+from contextlib import closing, contextmanager, suppress
 
 import pytest
 from mock_naoqi import MockNaoqi, Target
@@ -212,6 +213,51 @@ def test_close_is_prompt_while_waiting_to_reconnect():
     started = time.monotonic()
     src.close()
     assert time.monotonic() - started < 0.5
+
+
+@contextmanager
+def silent_url() -> Iterator[str]:
+    """A port that accepts TCP but never speaks qi: a connect attempt to it stays pending, as
+    one to a refused port does for 2 s on Windows, or to an unreachable host anywhere."""
+    with socket.create_server(("127.0.0.1", 0)) as server:
+        yield f"tcp://127.0.0.1:{server.getsockname()[1]}"
+
+
+def finishes_within(seconds: float, call: Callable[[], object]) -> bool:
+    """Run `call` on a daemon thread; whether it returned (or raised) within `seconds`. A call
+    that blocks for good fails the test instead of hanging the run."""
+
+    def run() -> None:
+        with suppress(Exception):  # only the time it takes matters here
+            call()
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    thread.join(seconds)
+    return not thread.is_alive()
+
+
+def test_cancel_gives_up_an_attempt_in_flight():
+    cancel = threading.Event()
+    errors: list[Exception] = []
+
+    def attempt() -> None:
+        try:
+            connect(url, cancel=cancel)
+        except ConnectionError as exc:
+            errors.append(exc)
+
+    with silent_url() as url:
+        threading.Timer(0.3, cancel.set).start()
+        assert finishes_within(0.8, attempt)
+    assert len(errors) == 1 and "cancelled" in str(errors[0])
+
+
+def test_close_is_prompt_while_an_attempt_is_in_flight():
+    with silent_url() as url:
+        src = NaoqiSource(url)
+        time.sleep(0.3)
+        assert finishes_within(0.5, src.close)
 
 
 def test_normalize_url():

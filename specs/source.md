@@ -7,7 +7,7 @@ tests:
 
 # Pose sources
 
-**Status:** Implemented
+**Status:** Updated
 
 ## Purpose
 
@@ -45,7 +45,7 @@ class PoseSource(Protocol):
 
 - Accepts `tcp://host:port`, `host:port`, or `host` alone (port 9559 implied); `normalize_url(url)` does that mapping.
 - Retries the connection up to 5 times, with 0.2 s, 0.4 s, 0.8 s… backoff. The libqi 3 wheels fail about one connect in three against NAOqi 2.1 with an instant `disconnected` error (root cause in the fork unknown), and naoqi-mcp already works around it the same way. After the last attempt it raises `ConnectionError`.
-- `cancel` (a `threading.Event`) cuts the retries short with a `ConnectionError`, so `NaoqiSource.close()` doesn't wait out a backoff.
+- `cancel` (a `threading.Event`) cuts the retries short with a `ConnectionError`, so `NaoqiSource.close()` doesn't wait out a backoff, nor an attempt in flight: one TCP attempt can take seconds (a refused port takes about 2 s on Windows, measured on CI's `windows-2025` runner, where Linux and macOS refuse at once; an unreachable host or a port that never speaks qi takes longer). Each attempt connects asynchronously (`session.connect(url, _async=True)`) and `connect` checks `cancel` every 50 ms while it is pending; once set, it cancels the attempt, closes the session without waiting and raises. A `cancel` already set when `connect` is called makes no attempt.
 - Shared by `NaoqiSource`, [check_model.md](check_model.md) and the viewer process ([api.md](api.md)).
 
 ### `NaoqiSource(url, rate_hz=50, commanded=False)`

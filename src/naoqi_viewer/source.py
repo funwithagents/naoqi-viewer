@@ -16,6 +16,7 @@ _log = logging.getLogger(__name__)
 _DEFAULT_PORT = 9559
 _CONNECT_ATTEMPTS = 5
 _CONNECT_FIRST_DELAY = 0.2  # s, doubling between attempts
+_CANCEL_POLL = 0.05  # s between checks of `cancel` during one connect attempt
 _RECONNECT_FIRST_DELAY = 0.5  # s, doubling up to _RECONNECT_MAX_DELAY
 _RECONNECT_MAX_DELAY = 5.0
 _FRAME_WORLD = 1
@@ -64,6 +65,19 @@ def _pause(seconds: float, cancel: threading.Event | None) -> bool:
     return cancel.wait(seconds)
 
 
+def _wait_connected(session: Any, url: str, cancel: threading.Event | None) -> None:
+    """Connect `session`, raising RuntimeError on failure. One TCP attempt can take seconds (a
+    refused port on Windows, an unreachable host anywhere), so a set `cancel` gives it up."""
+    future = session.connect(url, _async=True)
+    if cancel is not None:
+        while not future.isFinished():
+            if cancel.wait(_CANCEL_POLL):
+                future.cancel()
+                session.close(_async=True)  # don't wait out the pending attempt
+                raise ConnectionError(f"connecting to NAOqi at {url} was cancelled")
+    future.value()
+
+
 def connect(url: str, *, cancel: threading.Event | None = None) -> Any:
     """Open a qi session to NAOqi, retrying: the libqi 3 wheels fail some connects at once.
 
@@ -74,9 +88,11 @@ def connect(url: str, *, cancel: threading.Event | None = None) -> Any:
     delay = _CONNECT_FIRST_DELAY
     error: Exception | None = None
     for attempt in range(_CONNECT_ATTEMPTS):
+        if cancel is not None and cancel.is_set():
+            raise ConnectionError(f"connecting to NAOqi at {url} was cancelled")
         session = qi.Session()
         try:
-            session.connect(url)
+            _wait_connected(session, url, cancel)
             return session
         except RuntimeError as exc:
             error = exc
