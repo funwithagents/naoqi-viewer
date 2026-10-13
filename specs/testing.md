@@ -10,7 +10,7 @@ tests:
 
 # Testing
 
-**Status:** Implemented
+**Status:** Updated
 
 ## Purpose
 
@@ -49,7 +49,7 @@ naoqi-viewer owns a small mock rather than borrowing one from naoqi-bridge, whic
   - Optional `NaoqiSim` and `ALSystem` services, so all three target identifications can be tested.
 - **Effector transforms**: `getTransform` for effectors comes from the forward kinematics of the committed model (`nao.xml`). A test can add a fixed error to one effector, so `check-model` is tested both passing and failing.
 - **Control from tests**: a pytest fixture (`mock_naoqi`) yields `(url, mock)` for a virtual robot; other targets are built with `MockNaoqi(target=...)`. The test sets the pose (`mock.set_pose(...)`), can make calls fail (`mock.fail_calls(...)`), drop the session (`mock.disconnect()`) and serve again on the same port (`mock.restart()`) to exercise reconnection, and can read the calls received (`mock.calls_to(...)`).
-- **Verified transport**: the libqi 3.1.6 fork serves plain Python objects from a standalone session, a missing service raises `RuntimeError`, closing the server disconnects clients, and a restarted server rebinds the same port at once.
+- **Verified transport**: the libqi fork (3.1.6, and 3.1.8 since, on macOS) serves plain Python objects from a standalone session, a missing service raises `RuntimeError`, closing the server disconnects clients, and a restarted server rebinds the same port at once.
 
 ## Testing the viewer process
 
@@ -57,8 +57,18 @@ A windowed viewer process (a MuJoCo window, OpenGL, a subprocess) only runs in t
 
 - **Client side (`tests/`)**: `client.py` is tested against a **fake viewer process** (`tests/fake_viewer_process.py`): a small script speaking the protocol with canned frames and scripted failures, which `NaoqiViewer.launch()` starts as a real subprocess in place of `viewer_process` (tests swap the command it runs). Being a real subprocess, it exercises the ready line, stderr relaying, early exits and timeouts as well as the handshake, message encoding, `ModeError` on the client side, `ViewerClosed`, and calls from several threads.
 - **Viewer-process side (`tests/`)**: the viewer process's request handling (queueing, mirror refusing `camera_frame`, `status`) is called directly with the render function stubbed. No subprocess and no OpenGL.
-- **Real headless viewer (`tests/`)**: a headless sim `NaoqiViewer` on the mock NAOqi starts the real viewer process (no fake), waits for a pose, and checks that the frames it returns aren't blank and change when the mock's head turns. It needs no display, but it does need an offscreen OpenGL backend (Mesa's EGL on Linux, see [api.md](api.md), Headless). A session fixture checks for one in a subprocess, with the environment `launch()` would give the viewer, and **skips** these tests when there is none. A plain Linux image without `libegl1 libopengl0 libgl1-mesa-dri` therefore skips them instead of failing. With `NAOQI_VIEWER_REQUIRE_OFFSCREEN_GL` set (CI sets it, [ci.md](ci.md)), this skip and the in-process renderer test's skip become failures.
+- **Real headless viewer (`tests/`)**: a headless sim `NaoqiViewer` on the mock NAOqi starts the real viewer process (no fake), waits for a pose, and checks that the frames it returns aren't blank and change when the mock's head turns. It needs no display, but it does need an offscreen OpenGL backend (Mesa's EGL on Linux, CGL on a Mac with a GPU, GLFW on Windows with a GPU driver or Mesa; see [api.md](api.md), Headless). A session fixture checks for one in a subprocess, with the environment `launch()` would give the viewer, and **skips** these tests when there is none. A plain Linux image without `libegl1 libopengl0 libgl1-mesa-dri` therefore skips them instead of failing. With `NAOQI_VIEWER_REQUIRE_OFFSCREEN_GL` set (CI sets it, [ci.md](ci.md)), this skip and the in-process renderer test's skip become failures.
 - **Live (`tests-e2e/`)**: a `NaoqiViewer` in sim mode on `NAOQI_URL` starts the real viewer process. The test fetches real frames, checks they aren't blank, and checks that they change when the head moves. Whether the viewers the run opens are headless or windowed is the run's choice, not the test's (see "Live tier: headless or windowed" below). The tests' own qi sessions (to move the head) go through `naoqi_viewer.source.connect`, which retries as the viewer does, because the libqi 3 wheels fail some connects at once.
+
+## Platforms
+
+The fast tier runs on the three platforms naoqi-viewer installs on: Linux x86_64, macOS arm64 and Windows x64 ([project.md](project.md)), each in CI ([ci.md](ci.md)). The tests are the same everywhere; a few skip where what they test doesn't exist:
+
+- **Without offscreen OpenGL** (GitHub's macOS runners), the real headless viewer and the in-process renderer tests skip, as above.
+- **On Windows**:
+  - the two tests of CI's pseudo-terminal driver (`scripts/ci_fetch_meshes.py`) skip: it runs on the standard library's `pty`, which Windows lacks, and CI runs it on Linux;
+  - the test that a headless viewer process loads no window stack skips: MuJoCo's only Windows backend is GLFW itself, rendering into a hidden window.
+- Tests that mimic another platform (`mjpython` on macOS, EGL on Linux) set `sys.platform` and run everywhere.
 
 ## Test isolation
 

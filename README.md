@@ -18,7 +18,7 @@ The window shows a status overlay (target, NAOqi version, update rate, data age;
 
 ## Install
 
-Requirements: Python 3.12 or 3.13 on **macOS arm64** or **Linux x86_64**. These are the platforms the libqi wheels cover.
+Requirements: Python 3.12 or 3.13 on **macOS 11+ arm64**, **Linux x86_64** (glibc 2.28+) or **Windows x64**. These are the platforms the libqi wheels cover.
 
 ```sh
 git clone git@github.com:funwithagents/naoqi-viewer.git
@@ -26,9 +26,9 @@ cd naoqi-viewer
 uv sync
 ```
 
-libqi (`qi==3.1.6`) comes from the GitHub Releases of [funwithagents/libqi-python](https://github.com/funwithagents/libqi-python), not from PyPI, and uv resolves it through `pyproject.toml`. The way to install it with pip is still undecided.
+libqi (`qi>=3.1.8,<4`) comes from the package index of [funwithagents/libqi-python](https://github.com/funwithagents/libqi-python), `https://funwithagents.github.io/libqi-python/simple/`, not from PyPI (whose `qi` is Aldebaran's older 3.1.5). uv resolves it through `pyproject.toml`, also when naoqi-viewer is a git dependency of your project. With pip, add `--extra-index-url https://funwithagents.github.io/libqi-python/simple/`.
 
-On macOS, opening a window needs `mjpython`, which ships with `mujoco`. naoqi-viewer starts it for you. Headless rendering on Linux uses Mesa's EGL. On slim images, install it with `apt install libegl1 libopengl0 libgl1-mesa-dri`.
+On macOS, opening a window needs `mjpython`, which ships with `mujoco`. naoqi-viewer starts it for you. Headless rendering on Linux uses Mesa's EGL. On slim images, install it with `apt install libegl1 libopengl0 libgl1-mesa-dri`. On Windows, rendering needs OpenGL 2 or later from a GPU driver. On a machine without one (a VM), put Mesa's `opengl32.dll` and `libgallium_wgl.dll` ([mesa-dist-win](https://github.com/pal1000/mesa-dist-win), `x64/`) next to the `python.exe` the venv was made from.
 
 ## Command line
 

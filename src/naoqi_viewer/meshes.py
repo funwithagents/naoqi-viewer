@@ -59,7 +59,7 @@ class Visual:
 
 def visual_table() -> list[Visual]:
     """The committed table of Aldebaran visuals, in the URDF's link order."""
-    entries = json.loads(_TABLE_PATH.read_text())
+    entries = json.loads(_TABLE_PATH.read_text(encoding="utf-8"))
     return [
         Visual(
             body=e["body"],
@@ -98,7 +98,7 @@ def license_url(release: str) -> str:
 def load_manifest(directory: Path) -> dict[str, Any]:
     """Read and check an unlocked archive's manifest.json; raises MeshesError."""
     try:
-        manifest = json.loads((directory / "manifest.json").read_text())
+        manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise MeshesError(f"unreadable manifest in {directory}: {exc}") from None
     if manifest.get("format") != MANIFEST_FORMAT:
@@ -135,7 +135,7 @@ def installed(release: str | None = None) -> Path | None:
         return None
     directory = install_dir(release)
     try:
-        json.loads((directory / "ACCEPTANCE.json").read_text())
+        json.loads((directory / "ACCEPTANCE.json").read_text(encoding="utf-8"))
         manifest = load_manifest(directory)
     except (OSError, ValueError, MeshesError):
         return None
@@ -262,7 +262,9 @@ def fetch(
             "archive_sha256": archive_sha256,
             "naoqi_viewer_version": importlib.metadata.version("naoqi-viewer"),
         }
-        (staging / "ACCEPTANCE.json").write_text(json.dumps(accepted, indent=2) + "\n")
+        (staging / "ACCEPTANCE.json").write_text(
+            json.dumps(accepted, indent=2) + "\n", encoding="utf-8"
+        )
         final = install_dir(release)
         if final.exists():
             shutil.rmtree(final)

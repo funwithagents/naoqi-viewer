@@ -357,6 +357,12 @@ def test_the_package_holds_no_mesh_texture_or_archive():
 
 _CI_DRIVER = REPO / "scripts" / "ci_fetch_meshes.py"
 
+# The driver runs fetch-meshes on a pseudo-terminal (the standard library's pty), which Windows
+# lacks; CI runs it on Linux (specs/ci.md).
+posix_terminal = pytest.mark.skipif(
+    sys.platform == "win32", reason="the CI driver needs a POSIX pseudo-terminal"
+)
+
 # Stands in for fetch-meshes: insists on a terminal, prompts like it, and needs `yes`.
 _FAKE_FETCH = """
 import sys
@@ -368,6 +374,7 @@ sys.exit(0 if sys.stdin.readline().strip() == "yes" else 3)
 """
 
 
+@posix_terminal
 def test_the_ci_driver_types_yes_on_a_terminal():
     result = subprocess.run(
         [sys.executable, str(_CI_DRIVER), "--", sys.executable, "-c", _FAKE_FETCH],
@@ -380,6 +387,7 @@ def test_the_ci_driver_types_yes_on_a_terminal():
     assert "Type yes to accept the license" in result.stdout
 
 
+@posix_terminal
 def test_the_ci_driver_fails_when_no_prompt_comes():
     result = subprocess.run(
         [

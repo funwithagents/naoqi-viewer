@@ -1,11 +1,12 @@
 # Continuous integration — specs/ci.md.
 #
-# Three jobs side by side on GitHub's hosted runners, on every pull request and push to main:
+# Four jobs side by side on GitHub's hosted runners, on every pull request and push to main:
 # `check` (lint, format, types), `fast-tier` (tests/, with a real headless viewer on the mock
-# NAOqi) and `e2e-naoqi-sim` (tests-e2e/ against a real NAOqi 2.1 that naoqi-sim builds on the
-# runner; headless and windowed). Matrix entries run side by side too, and none waits on
-# another. All on Linux: macOS runners have no OpenGL and no Docker (specs/ci.md). No secret
-# is needed.
+# NAOqi, on Linux, macOS and Windows), `meshes` (Aldebaran's meshes fetched and rendered) and
+# `e2e-naoqi-sim` (tests-e2e/ against a real NAOqi 2.1 that naoqi-sim builds on the runner;
+# headless and windowed). Matrix entries run side by side too, and none waits on another. Only
+# the fast tier leaves Linux: macOS and Windows runners have no Docker for naoqi-sim, and
+# macOS ones no OpenGL (specs/ci.md). No secret is needed.
 
 name: CI
 
@@ -25,6 +26,10 @@ env:
   APT_GL: libegl1 libopengl0 libgl1-mesa-dri
   # A virtual X display, and Mesa's GLX for MuJoCo's window (GLFW), for the windowed live run.
   APT_WINDOW: xvfb xauth libgl1 libglx-mesa0
+  # Mesa for Windows (pal1000/mesa-dist-win), whose llvmpipe gives the GPU-less Windows runner
+  # OpenGL for the fast tier's renders; pinned with its SHA-256, bumped on purpose.
+  MESA_WIN_URL: https://github.com/pal1000/mesa-dist-win/releases/download/26.2.3/mesa3d-26.2.3-release-msvc.7z
+  MESA_WIN_SHA256: 3f3613adb43cfd0f2e665ce2400b130c275f0b3317cb3a05566320a3a67589ed
   # The naoqi-sim commit whose docker/ recipes build the live job's NAOqi; bumped on purpose.
   NAOQI_SIM_REF: 8ca438d071e9332caf9a4c934b90358be6851f18
 
@@ -49,12 +54,22 @@ jobs:
         run: uv run pyright
 
   fast-tier:
-    name: fast tier
-    runs-on: ubuntu-24.04
+    name: fast tier, ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
+    strategy:
+      # Each platform its own qi wheel, MuJoCo build and OpenGL; one failing leaves the others
+      # running. macOS has no OpenGL, so its rendering tests skip (specs/ci.md).
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
       - name: System packages (offscreen OpenGL)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends -o Acquire::http::Timeout=30 -o Acquire::Retries=3 $APT_GL
@@ -64,13 +79,25 @@ jobs:
           cache-dependency-glob: uv.lock
       - name: Sync (against the lock)
         run: uv sync --locked
+      # Windows loads opengl32.dll from the executable's folder before System32's, which only
+      # has OpenGL 1.1 without a GPU driver: Mesa's two DLLs go next to the base python.exe
+      # (the venv's python.exe starts that one).
+      - name: Mesa's OpenGL (llvmpipe)
+        if: runner.os == 'Windows'
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/mesa.7z" "$MESA_WIN_URL"
+          echo "$MESA_WIN_SHA256  $RUNNER_TEMP/mesa.7z" | sha256sum -c -
+          python_dir=$(uv run python -c "import sys; sys.stdout.write(sys.base_prefix)")  # no CRLF
+          7z e -y "$RUNNER_TEMP/mesa.7z" -o"$python_dir" x64/opengl32.dll x64/libgallium_wgl.dll
       - name: Fast tier
         env:
-          # The in-process renderer test renders through EGL too (MuJoCo's Linux default is
-          # GLFW, which needs a display), and a runner without offscreen GL fails the job
-          # instead of skipping the headless viewer tests (specs/ci.md).
-          MUJOCO_GL: egl
-          NAOQI_VIEWER_REQUIRE_OFFSCREEN_GL: "1"
+          # Linux: the in-process renderer test renders through EGL too (MuJoCo's Linux default
+          # is GLFW, which needs a display). Windows: MuJoCo's GLFW on Mesa's llvmpipe.
+          MUJOCO_GL: ${{ runner.os == 'Linux' && 'egl' || '' }}
+          GALLIUM_DRIVER: llvmpipe
+          # A runner without offscreen GL fails the job instead of skipping the headless viewer
+          # tests, except on macOS, which has none (specs/ci.md).
+          NAOQI_VIEWER_REQUIRE_OFFSCREEN_GL: ${{ runner.os != 'macOS' && '1' || '' }}
         run: uv run pytest -rs
 
   meshes:

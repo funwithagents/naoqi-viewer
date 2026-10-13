@@ -122,12 +122,11 @@ Ready-made config files live in `examples/configs/` (`mirror.json`, `sim-table.j
 ## Packaging and platforms
 
 - Python 3.12–3.13, packaged with uv, `src/` layout ([project.md](project.md)).
-- Platforms are those the libqi wheels cover: macOS arm64 and Linux x86_64. On macOS a window needs `mjpython`, which `launch()` picks itself; a headless viewer renders offscreen on both (CGL on macOS, EGL on Linux).
-- CI runs on Linux only: GitHub's macOS runners have no OpenGL, so macOS is tested locally ([ci.md](ci.md)).
+- Platforms are those the libqi wheels cover: macOS arm64, Linux x86_64 and Windows x64, with `qi` from the libqi fork's package index ([project.md](project.md)). On macOS a window needs `mjpython`, which `launch()` picks itself; a headless viewer renders offscreen on all three (CGL on macOS, EGL on Linux, GLFW's hidden window on Windows).
+- CI runs the fast tier on all three platforms, and everything else on Linux: GitHub's macOS runners have no OpenGL, so the macOS window and renders are tested locally, and the Windows runner renders through Mesa ([ci.md](ci.md)).
 
 ## Open questions
 
 Cross-cutting ones only; each concept spec keeps its own.
 
-1. **libqi for pip users**: `[tool.uv.sources]` only serves uv-based development; a published wheel would declare a bare `qi`. How pip users get the fork's wheels is undecided ([project.md](project.md)).
-2. **NAOqi 2.8 / NAO V6**: validate the model and `check-model` against 2.8, and decide whether CI runs it ([model.md](model.md), [ci.md](ci.md)).
+1. **NAOqi 2.8 / NAO V6**: validate the model and `check-model` against 2.8, and decide whether CI runs it ([model.md](model.md), [ci.md](ci.md)).

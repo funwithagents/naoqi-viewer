@@ -7,9 +7,7 @@ the visual table gets a textured tetrahedron, and the head a second, flat-colore
 
 import hashlib
 import json
-import shutil
 import struct
-import subprocess
 import zlib
 from dataclasses import dataclass
 from pathlib import Path
@@ -99,16 +97,76 @@ def write_release_tree(root: Path, release: str) -> Path:
     return folder
 
 
+class _ZipCrypto:
+    """PKWARE's traditional encryption (ZipCrypto), the cipher `zip -e` writes and zipfile reads."""
+
+    def __init__(self, password: bytes) -> None:
+        self.keys = [0x12345678, 0x23456789, 0x34567890]
+        for byte in password:
+            self._update(byte)
+
+    @staticmethod
+    def _crc(
+        crc: int, byte: int
+    ) -> int:  # one CRC-32 step, without zlib's pre/post inversion
+        return zlib.crc32(bytes([byte]), crc ^ 0xFFFFFFFF) ^ 0xFFFFFFFF
+
+    def _update(self, byte: int) -> None:
+        k0, k1, k2 = self.keys
+        k0 = self._crc(k0, byte)
+        k1 = ((k1 + (k0 & 0xFF)) * 134775813 + 1) & 0xFFFFFFFF
+        k2 = self._crc(k2, k1 >> 24)
+        self.keys = [k0, k1, k2]
+
+    def encrypt(self, data: bytes) -> bytes:
+        out = bytearray()
+        for byte in data:
+            temp = (self.keys[2] | 2) & 0xFFFF
+            out.append(byte ^ (((temp * (temp ^ 1)) >> 8) & 0xFF))
+            self._update(byte)
+        return bytes(out)
+
+
 def zip_encrypted(source_root: Path, folder_name: str, out: Path) -> bytes:
-    """Zip `source_root/folder_name` with ZipCrypto under naoqi-viewer's password."""
-    if shutil.which("zip") is None:
-        pytest.skip("the zip command is needed to build an encrypted test archive")
-    password = meshes._PASSWORD.decode()
-    subprocess.run(
-        ["zip", "-q", "-r", "-e", "-P", password, str(out), folder_name],
-        cwd=source_root,
-        check=True,
+    """Zip `source_root/folder_name` with ZipCrypto under naoqi-viewer's password, as `zip -r -e`
+    does: deflated files, unencrypted folder entries. Written here because zipfile can only read
+    encrypted entries, and a `zip` command isn't on every machine (Windows)."""
+    entries, central = bytearray(), bytearray()
+    paths = sorted((source_root / folder_name).rglob("*"))
+    for path in [source_root / folder_name, *paths]:
+        name = path.relative_to(source_root).as_posix() + ("/" if path.is_dir() else "")
+        plain = b"" if path.is_dir() else path.read_bytes()
+        crc = zlib.crc32(plain)
+        if path.is_dir():
+            flags, method, data = 0, 0, b""
+        else:
+            deflate = zlib.compressobj(9, zlib.DEFLATED, -15)
+            cipher = _ZipCrypto(meshes._PASSWORD)
+            # The 12-byte header ends with the CRC's high byte, which readers check the password by.
+            header = bytes(range(11)) + bytes([crc >> 24])
+            data = cipher.encrypt(header + deflate.compress(plain) + deflate.flush())
+            flags, method = 0x1, 8
+        fields = struct.pack(
+            "<HHHHHIIIHH",
+            20,
+            flags,
+            method,
+            0,
+            0x21,
+            crc,
+            len(data),
+            len(plain),
+            len(name),
+            0,
+        )
+        central += struct.pack("<IH", 0x02014B50, 20) + fields
+        central += struct.pack("<HHHII", 0, 0, 0, 0, len(entries)) + name.encode()
+        entries += struct.pack("<I", 0x04034B50) + fields + name.encode() + data
+    count = len(paths) + 1
+    end = struct.pack(
+        "<IHHHHIIH", 0x06054B50, 0, 0, count, count, len(central), len(entries), 0
     )
+    out.write_bytes(bytes(entries + central + end))
     return out.read_bytes()
 
 

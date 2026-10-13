@@ -89,15 +89,17 @@ def _viewer_command(config: NaoqiViewerConfig) -> list[str]:
     ]
 
 
-def _viewer_env(config: NaoqiViewerConfig) -> dict[str, str] | None:
-    """The viewer process's environment, or None to inherit ours.
+def _viewer_env(config: NaoqiViewerConfig) -> dict[str, str]:
+    """The viewer process's environment: ours, with its pipes in UTF-8.
 
-    A headless viewer on Linux renders through EGL unless MUJOCO_GL says otherwise: with Mesa's
-    software device it needs no display and no GPU.
+    Its output is read as UTF-8 whatever the locale (Windows' is a legacy code page that can't
+    print every path). A headless viewer on Linux renders through EGL unless MUJOCO_GL says
+    otherwise: with Mesa's software device it needs no display and no GPU.
     """
-    if not config.headless or sys.platform != "linux" or "MUJOCO_GL" in os.environ:
-        return None
-    return {**os.environ, "MUJOCO_GL": "egl"}
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    if config.headless and sys.platform == "linux" and "MUJOCO_GL" not in os.environ:
+        env["MUJOCO_GL"] = "egl"
+    return env
 
 
 class _ProcessOutput:
@@ -224,7 +226,8 @@ class NaoqiViewer:
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
+            encoding="utf-8",
+            errors="replace",  # libqi's own log lines are not ours to trust
             bufsize=1,
         )
         output = _ProcessOutput(process)
