@@ -45,7 +45,7 @@ NaoqiViewerConfig (config.py)            render loop, 60 Hz (viewer.py) ◀─�
 | `NaoqiViewer` client | Caller | Starts the viewer process (`mjpython` on macOS, plain Python when headless), waits for its ready line, sends requests, relays its logs, ties its lifetime to the caller's. Standard library and `numpy` only | [api.md](api.md) |
 | Protocol | Both | Length-prefixed JSON header plus raw payload over one loopback TCP connection: `hello`, `status`, `camera_frame`, `stop` | [api.md](api.md) |
 | Viewer process | Viewer process | Loads the world, builds the pose source, runs the loop, answers requests between frames on the thread that owns the OpenGL contexts | [api.md](api.md) |
-| Pose source | Viewer process, its own thread | `connect()` with retries; `NaoqiSource` polls measured (and optionally commanded) angles and the torso pose at 50 Hz, reconnects with backoff, identifies the target (`real`, `naoqi-sim`, `virtual`) | [source.md](source.md) |
+| Pose source | Viewer process, its own thread | `connect()` in one cancellable attempt; `NaoqiSource` polls measured (and optionally commanded) angles and the torso pose at 50 Hz, reconnects with backoff, identifies the target (`real`, `naoqi-sim`, `virtual`) | [source.md](source.md) |
 | Viewer loop | Viewer process, main thread | `launch_passive` window at 60 Hz with the status overlay, ghost and attribution; or the windowless headless loop | [viewer.md](viewer.md) |
 | Model and scenes | Viewer process | `nao.xml`, bundled scenes (`empty`, `table`) or a user MJCF, `load_world`, `NaoPose`, `PoseWriter` | [model.md](model.md) |
 | Meshes | User's machine | `fetch-meshes`: typed license acceptance, then the pinned encrypted archive of [naoqi-meshes](https://github.com/funwithagents/naoqi-meshes) (OBJ and PNG) unlocked locally; `variant: "aldebaran"` swaps the placeholder visuals for them | [meshes.md](meshes.md) |
@@ -105,7 +105,7 @@ The code is MIT.
 
 - **NAOqi 2.1.4.13 (NAO V5)** is the validated target: `check-model` passes against it, and CI's live tier runs against naoqi-sim's 2.1 image.
 - **NAOqi 2.8 (NAO V6)** is meant to work through the same qi calls, but is not validated yet. The model is V5 (H25) geometry; whether V6 needs its own URDF and camera field of view is open ([model.md](model.md)).
-- Host code uses `qi.Session` and `session.service()` from the libqi 3 wheels. Their connects fail about one time in three against 2.1 with an instant `disconnected`, so every connection goes through `connect()`'s retries ([source.md](source.md)).
+- Host code uses `qi.Session` and `session.service()` from the libqi 3 wheels. From 3.1.8 their connects succeed at the first attempt (3.1.6's failed some with an instant `disconnected` and needed retries), so `connect()` makes one, which `cancel` can give up ([source.md](source.md)).
 
 ## CLI
 

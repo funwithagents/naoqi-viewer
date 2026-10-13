@@ -14,7 +14,7 @@ from naoqi_viewer.source import connect
 
 def _head_can_move(url: str) -> bool:
     """Moving the head is fine on naoqi-sim or a virtual robot, never on a real one."""
-    session = connect(url)  # retries: the libqi 3 wheels fail some connects at once
+    session = connect(url)
     try:
         return "ALSystem" not in {service["name"] for service in session.services()}
     finally:
@@ -22,7 +22,7 @@ def _head_can_move(url: str) -> bool:
 
 
 def _move_head(url: str, yaw: float) -> None:
-    session = connect(url)  # retries: the libqi 3 wheels fail some connects at once
+    session = connect(url)
     try:
         motion = session.service("ALMotion")
         motion.setStiffnesses("Head", 1.0)

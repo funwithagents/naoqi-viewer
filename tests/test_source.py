@@ -8,7 +8,6 @@ from contextlib import closing, contextmanager, suppress
 import pytest
 from mock_naoqi import MockNaoqi, Target
 
-from naoqi_viewer import source
 from naoqi_viewer.model import JOINT_NAMES
 from naoqi_viewer.source import NaoqiSource, Sample, connect, normalize_url
 
@@ -275,20 +274,30 @@ def test_connect_accepts_a_url_without_scheme(mock_naoqi: tuple[str, MockNaoqi])
         session.close()
 
 
-def test_connect_retries_five_times_with_backoff_then_raises(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    pauses: list[float] = []
+def test_a_failed_connect_is_not_retried():
+    # A server that hangs up at once, as NAOqi seemed to for libqi 3.1.6 (an instant
+    # `disconnected`): one attempt, then ConnectionError naming the URL.
+    accepted: list[socket.socket] = []
+    with socket.create_server(("127.0.0.1", 0)) as server:
+        server.settimeout(0.1)
 
-    def record(seconds: float, cancel: threading.Event | None) -> bool:
-        pauses.append(seconds)
-        return False
+        def hang_up() -> None:
+            while server.fileno() != -1:
+                try:
+                    peer, _ = server.accept()
+                except TimeoutError:
+                    continue
+                except OSError:  # the server closed
+                    return
+                accepted.append(peer)
+                peer.close()
 
-    monkeypatch.setattr(source, "_pause", record)
-    url = free_url()
-    with pytest.raises(ConnectionError, match=url):
-        connect(url)
-    assert pauses == pytest.approx([0.2, 0.4, 0.8, 1.6])
+        threading.Thread(target=hang_up, daemon=True).start()
+        url = f"tcp://127.0.0.1:{server.getsockname()[1]}"
+        with pytest.raises(ConnectionError, match=url):
+            connect(url)
+        time.sleep(1.0)  # room for a retry (the old one came after 0.2 s)
+    assert len(accepted) == 1
 
 
 def test_connect_stops_when_cancelled():
