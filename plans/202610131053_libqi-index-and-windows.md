@@ -1,6 +1,6 @@
 # libqi from its package index, and Windows
 
-**Status:** In progress
+**Status:** Done
 
 Implements [project.md](../specs/project.md) ("libqi", "Platforms"), [source.md](../specs/source.md) ("`connect`"), [api.md](../specs/api.md) ("Headless", "Viewer process"), [meshes.md](../specs/meshes.md) ("Location", "Testing"), [testing.md](../specs/testing.md) ("Platforms") and [ci.md](../specs/ci.md) ("The runner", "The fast tier in CI"). `qi` 3.1.8 comes from the libqi fork's package index on GitHub Pages instead of per-wheel release URLs, Windows x64 joins macOS arm64 and Linux x86_64, and CI runs the fast tier on all three. The live and meshes jobs stay on Linux. naoqi-sim moves to this commit afterwards, in its own change.
 
@@ -40,4 +40,4 @@ Implements [project.md](../specs/project.md) ("libqi", "Platforms"), [source.md]
 - Locally on macOS arm64 with qi 3.1.8: lint, format, types, the fast tier (186 passed), and the live tier against naoqi-sim's NAOqi 2.1, headless (4 passed, the mirror test skipped) and windowed (5 passed, the meshes test included).
 - Step 1 measured with uv 0.11.29: the git and path dependents locked `qi` 3.1.8 from the index, and the git one imported it; pip 3.12 installed `qi` 3.1.8.
 - The non-ASCII launch test fails without the `client.py` change and passes with it. The two in-flight tests fail without the `source.py` change (within their time bound, no hang) and pass with it; the no-retry test counts 5 attempts on the retrying `connect` and 1 on the new one. Info-ZIP's `unzip -t` accepts the test-built archive and refuses a wrong password.
-- On GitHub: every job green; fast-tier skips as ci.md expects (Linux none; Windows the driver's two tests and the window-stack test; macOS the offscreen renders).
+- On GitHub: every job green on [run 38377410180](https://github.com/funwithagents/naoqi-viewer/actions/runs/38377410180), with ci.md's expected skips: fast tier Linux 188 passed; Windows 185 passed, the driver's two tests and the window-stack test skipped; macOS 186 passed, the two offscreen renders skipped. The first run ([38373382250](https://github.com/funwithagents/naoqi-viewer/actions/runs/38373382250)) found the Windows failures step 6 fixed.

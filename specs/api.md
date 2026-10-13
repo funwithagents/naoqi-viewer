@@ -15,7 +15,7 @@ tests:
 
 # Viewer API
 
-**Status:** Updated
+**Status:** Implemented
 
 ## Purpose
 
