@@ -12,17 +12,19 @@ tests:
 
 ## Purpose
 
-The verification gate of [AGENTS.md](../AGENTS.md) (lint, type check, tests) runs on GitHub's hosted runners for every pull request and every push to `main`, so each change gets a machine's verdict, not only a local command. CI runs both test tiers ([testing.md](testing.md)) and as much of each as a hosted runner can: the fast tier, with a real headless viewer on the mock NAOqi, and the live tier against a real NAOqi that naoqi-sim builds on the runner, headless and with windows. Like [testing.md](testing.md), this is a cross-cutting practice, not a runtime concept: nothing here ships in the library, and the one file that implements it is the workflow.
+The verification gate of [AGENTS.md](../AGENTS.md) (lint, type check, tests) runs on GitHub's hosted runners for every pull request and every push to `main`, so each change gets a machine's verdict, not only a local command. CI runs both test tiers ([testing.md](testing.md)) and as much of each as a hosted runner can: the fast tier, with a real headless viewer on the mock NAOqi, on each platform naoqi-viewer installs on, and the live tier against a real NAOqi that naoqi-sim builds on the runner, headless and with windows. Like [testing.md](testing.md), this is a cross-cutting practice, not a runtime concept: nothing here ships in the library, and the one file that implements it is the workflow.
 
 ## Decided
 
 ### The runner
 
-- **GitHub-hosted runners, the free tier.** The repository is public, so minutes cost nothing, and CI covers every path a runner can run reliably. Every job runs on `ubuntu-24.04`, pinned by name rather than `ubuntu-latest`, so an image only changes when the pin is bumped on purpose. No self-hosted runner.
-- **Linux only.** CI is the project's Linux target: the Linux x86_64 `qi` wheel, the EGL default of a headless viewer ([api.md](api.md), "Headless"), a windowed viewer under a virtual display, and Docker running naoqi-sim's amd64 NAOqi with no emulation.
-- **No macOS job.** GitHub's macOS runners (Apple Silicon VMs) can't test the viewer. They have no GPU and so no OpenGL: MuJoCo's CGL backend asks for an accelerated pixel format (`CGLPFAAccelerated`) and fails with `invalid pixel format`, measured on a `macos-15` fast-tier run, and GLFW, MuJoCo's other macOS backend, asks for one too. They have no Docker, so no naoqi-sim. A macOS fast tier would skip every rendering test and cover only the platform-neutral rest, which Linux already runs. macOS, where naoqi-viewer is developed, is tested locally (`mjpython`, CGL, the window).
+- **GitHub-hosted runners, the free tier.** The repository is public, so minutes cost nothing, and CI covers every path a runner can run reliably. Runners are pinned by name (`ubuntu-24.04`, `macos-15`, `windows-2025`) rather than `*-latest`, so an image only changes when the pin is bumped on purpose. No self-hosted runner.
+- **The fast tier on the three platforms, the rest on Linux.** naoqi-viewer installs on Linux x86_64, macOS arm64 and Windows x64 ([project.md](project.md)), each with its own `qi` wheel and MuJoCo build, and the fast tier exercises both for real (the mock NAOqi is a real `qi.Session`). So the fast tier runs on each, which also checks that `uv.lock` installs there. Linux carries everything else: the EGL default of a headless viewer ([api.md](api.md), "Headless"), a windowed viewer under a virtual display, and Docker running naoqi-sim's amd64 NAOqi with no emulation.
+- **macOS: the fast tier without OpenGL.** GitHub's macOS runners (Apple Silicon VMs) have no GPU and so no OpenGL: MuJoCo's CGL backend asks for an accelerated pixel format (`CGLPFAAccelerated`) and fails with `invalid pixel format`, measured on a `macos-15` fast-tier run, and GLFW, MuJoCo's other macOS backend, asks for one too. Its rendering tests therefore skip, and the job checks the rest: the macOS `qi` wheel against the mock NAOqi, the lock, and everything platform-neutral. An earlier macOS entry was dropped for covering only what Linux runs; the per-platform `qi` wheels are what make it worth its minutes now. The window, CGL and `mjpython` are still tested locally, on the Macs naoqi-viewer is developed on.
+- **Windows: the fast tier on Mesa.** GitHub's Windows runners have no GPU either, and Windows' own `opengl32.dll` is OpenGL 1.1, too old for MuJoCo. A step puts Mesa's llvmpipe in its place (below), so the rendering tests run, as on Linux.
+- **The live and meshes jobs stay on Linux.** macOS and Windows runners can't run naoqi-sim's Linux containers (no Docker on macOS, Windows containers only on Windows). The meshes job's platform-specific part (data directory, extraction, paths handed to MuJoCo) is already in the fast tier, through its test-built archive, on all three; the real archive is the same bytes everywhere, and its pseudo-terminal driver is POSIX only ([meshes.md](meshes.md)).
 - **One Python**, 3.12: the floor of `requires-python`, and the version `.python-version` names. uv installs it.
-- **System packages.** Mesa's EGL (`libegl1 libopengl0 libgl1-mesa-dri`) in the two test jobs, for offscreen rendering with no display and no GPU. The windowed live entry adds a virtual X display and Mesa's GLX (`xvfb xauth libgl1 libglx-mesa0`). Nothing else is installed with apt.
+- **System packages.** On Linux, Mesa's EGL (`libegl1 libopengl0 libgl1-mesa-dri`) in the three test jobs, for offscreen rendering with no display and no GPU. The windowed live entry adds a virtual X display and Mesa's GLX (`xvfb xauth libgl1 libglx-mesa0`). Nothing else is installed with apt. On Windows, Mesa from its release archive (below); on macOS, nothing.
 
 ### The workflow
 
@@ -31,11 +33,11 @@ One file, `.github/workflows/ci.yml`. It triggers on `pull_request`, on `push` t
 | Job | What |
 |---|---|
 | `check` | `uv sync --locked`, then `ruff check .`, `ruff format --check .`, `pyright`: the static gate |
-| `fast-tier` | Mesa's EGL; `pytest -rs`, the fast tier (`tests/` only, from `testpaths`), with `MUJOCO_GL=egl` and `NAOQI_VIEWER_REQUIRE_OFFSCREEN_GL=1` |
+| `fast-tier` | Matrix `ubuntu-24.04`, `macos-15`, `windows-2025`: `pytest -rs`, the fast tier (`tests/` only, from `testpaths`); on Linux with Mesa's EGL and `MUJOCO_GL=egl`, on Windows with Mesa's llvmpipe; `NAOQI_VIEWER_REQUIRE_OFFSCREEN_GL=1` on both, not on macOS |
 | `meshes` | Mesa's EGL; `naoqi-viewer fetch-meshes` under a pseudo-terminal that types `yes`; `pytest tests-e2e/test_meshes_live.py -rs` with `MUJOCO_GL=egl`, `NAOQI_VIEWER_REQUIRE_MESHES=1` and `NAOQI_VIEWER_REQUIRE_OFFSCREEN_GL=1` |
 | `e2e-naoqi-sim` | Matrix `headless`, `window`, on `ubuntu-24.04`: naoqi-sim at a pinned commit builds and starts NAOqi 2.1; `pytest tests-e2e -rs` with `NAOQI_URL=tcp://127.0.0.1:9559`, the `window` entry with `NAOQI_VIEWER_E2E_WINDOW=1` under `xvfb-run` |
 
-The four jobs and the live job's two entries (five runners in all) run side by side, and none waits on another: a run takes as long as its slowest entry (a live one). The live matrix doesn't fail fast, so one entry failing leaves the other running.
+The four jobs, the fast tier's three entries and the live job's two (seven runners in all) run side by side, and none waits on another: a run takes as long as its slowest entry (a live one). Neither matrix fails fast, so one entry failing leaves the others running. Every step runs in bash, Windows included (Git's bash on its runners).
 
 - **`--locked`.** The sync fails when `uv.lock` doesn't match `pyproject.toml`, so a dependency edit lands with its relock or not at all.
 - **The format check covers the whole repo** (`.`). `specs/` and `plans/` are excluded in `pyproject.toml`, because ruff also formats Python blocks inside Markdown and the specs' blocks are hand-aligned. A local `ruff format .` is therefore the same command, and touches Python files only.
@@ -44,9 +46,11 @@ The four jobs and the live job's two entries (five runners in all) run side by s
 
 ### The fast tier in CI
 
-- `MUJOCO_GL=egl` for the whole run. MuJoCo's default on Linux is GLFW, which needs a display, so without this the in-process renderer test would skip. The headless viewer tests get EGL from `launch()` either way.
-- `NAOQI_VIEWER_REQUIRE_OFFSCREEN_GL=1` turns the "no offscreen OpenGL" skips into failures ([testing.md](testing.md), "Testing the viewer process"). A runner that loses its GL packages fails the job instead of passing it on skips.
-- **Expected skips: none.**
+- **Linux**: `MUJOCO_GL=egl` for the whole run. MuJoCo's default on Linux is GLFW, which needs a display, so without this the in-process renderer test would skip. The headless viewer tests get EGL from `launch()` either way.
+- **Windows**: MuJoCo's GLFW, in hidden windows, on Mesa's llvmpipe. Windows loads `opengl32.dll` from the executable's folder before `System32`, so the step copies Mesa's `opengl32.dll` and `libgallium_wgl.dll` (from the `x64/` folder of [pal1000/mesa-dist-win](https://github.com/pal1000/mesa-dist-win)'s MSVC release archive) next to the base interpreter's `python.exe` (`sys.base_prefix`), which the venv's `python.exe` starts. The archive is pinned in the workflow by URL and SHA-256 (`MESA_WIN_URL`, `MESA_WIN_SHA256`; 26.2.3 today), checked before it is unpacked, and bumped on purpose. `GALLIUM_DRIVER=llvmpipe` picks Mesa's software rasterizer over its Direct3D 12 driver, which needs a GPU.
+- **macOS**: nothing to install, and nothing to render with.
+- `NAOQI_VIEWER_REQUIRE_OFFSCREEN_GL=1` on Linux and Windows turns the "no offscreen OpenGL" skips into failures ([testing.md](testing.md), "Testing the viewer process"). A runner that loses its GL fails the job instead of passing it on skips. macOS doesn't set it.
+- **Expected skips** ([testing.md](testing.md), "Platforms"): **Linux, none. Windows**: the two tests of the pseudo-terminal driver and the window-stack test. **macOS**: the tests that render offscreen. Any other skip is a regression.
 - **Timing tests ask for rates any runner reaches.** A macOS runner polled the mock NAOqi at 27 Hz at most, so a test that the source follows `rate_hz` uses 5 and 15 Hz, not 50: it checks the behavior, not the machine's speed.
 
 ### The live job: a real NAOqi from naoqi-sim
@@ -72,8 +76,8 @@ The four jobs and the live job's two entries (five runners in all) run side by s
 
 ### Secrets and protection
 
-- **No secret is required**, and none is used. naoqi-sim is public, so pull requests from forks run the same four jobs.
-- **The status checks to require on `main`** are every entry: `lint, format, types`, `fast tier`, `meshes`, `live tier, naoqi-sim NAOqi 2.1, headless` and `live tier, naoqi-sim NAOqi 2.1, window`. Requiring them is a repository setting on GitHub, outside the repo.
+- **No secret is required**, and none is used. naoqi-sim and Mesa's archive are public, so pull requests from forks run the same four jobs.
+- **The status checks to require on `main`** are every entry: `lint, format, types`, `fast tier, ubuntu-24.04`, `fast tier, macos-15`, `fast tier, windows-2025`, `meshes`, `live tier, naoqi-sim NAOqi 2.1, headless` and `live tier, naoqi-sim NAOqi 2.1, window`. Requiring them is a repository setting on GitHub, outside the repo.
 
 ## Open questions
 

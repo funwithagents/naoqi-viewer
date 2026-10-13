@@ -6,13 +6,13 @@ readme = "README.md"
 authors = [
     { name = "Thibault Hervier", email = "thibault@fr2g.io" }
 ]
-requires-python = ">=3.12,<3.14"  # capped by the libqi wheels (cp312, cp313)
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "mujoco>=3.15.0",
     "numpy>=2.5.3",
     "platformdirs>=4.12.4",
     "pyyaml>=6.0.3",
-    "qi==3.1.6",
+    "qi>=3.1.8,<4",
 ]
 
 [project.scripts]
@@ -29,22 +29,23 @@ dev = [
     "ruff>=0.16.10",
 ]
 
-# libqi Python 3 wheels come from the GitHub Releases of the funwithagents fork, not PyPI
-# (how pip users resolve them is an open question in the overview spec). Only macOS arm64
-# and Linux x86_64 wheels exist.
+# libqi Python 3 wheels come from the funwithagents fork's package index on GitHub Pages, not PyPI
+# (PyPI's `qi` is Aldebaran's older 3.1.5). The fork builds them for macOS arm64, Linux x86_64 and
+# Windows x64 only.
 [tool.uv]
 environments = [
     "sys_platform == 'darwin' and platform_machine == 'arm64'",
     "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
 ]
 
+[[tool.uv.index]]
+name = "libqi"
+url = "https://funwithagents.github.io/libqi-python/simple/"
+explicit = true  # only the packages pinned to it below come from it
+
 [tool.uv.sources]
-qi = [
-    { url = "https://github.com/funwithagents/libqi-python/releases/download/v3.1.6/qi-3.1.6-cp312-cp312-macosx_15_0_arm64.whl", marker = "sys_platform == 'darwin' and python_version == '3.12'" },
-    { url = "https://github.com/funwithagents/libqi-python/releases/download/v3.1.6/qi-3.1.6-cp313-cp313-macosx_15_0_arm64.whl", marker = "sys_platform == 'darwin' and python_version == '3.13'" },
-    { url = "https://github.com/funwithagents/libqi-python/releases/download/v3.1.6/qi-3.1.6-cp312-cp312-manylinux_2_34_x86_64.whl", marker = "sys_platform == 'linux' and python_version == '3.12'" },
-    { url = "https://github.com/funwithagents/libqi-python/releases/download/v3.1.6/qi-3.1.6-cp313-cp313-manylinux_2_34_x86_64.whl", marker = "sys_platform == 'linux' and python_version == '3.13'" },
-]
+qi = { index = "libqi" }
 
 [tool.ruff]
 target-version = "py312"  # keep in sync with requires-python

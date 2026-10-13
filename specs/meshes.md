@@ -38,7 +38,7 @@ Releases are immutable. naoqi-viewer pins one tag and its archive's SHA-256 (`me
 
 ### Location
 
-- Everything lives in `platformdirs.user_data_dir("naoqi-viewer")/meshes/V40-r<N>/`: the archive's contents (`manifest.json`, `meshes/`, `textures/`, `NOTICE`, `LICENSE`) and `ACCEPTANCE.json`.
+- Everything lives in `platformdirs.user_data_dir("naoqi-viewer")/meshes/V40-r<N>/`: the archive's contents (`manifest.json`, `meshes/`, `textures/`, `NOTICE`, `LICENSE`) and `ACCEPTANCE.json`. The JSON files are read and written as UTF-8 on every platform.
 - Nothing is ever written to the working tree. `.gitignore` and the asset guard (see Testing) back this up.
 - `meshes.installed() -> Path | None` returns that directory when `ACCEPTANCE.json` is there, `manifest.json` covers every mesh of the visual table, and every file the manifest names exists. Otherwise it returns `None`. [model.md](model.md)'s `resolve_variant` relies on it.
 
@@ -85,7 +85,7 @@ There is no command to export the meshes or a model that includes them, and no c
 
 ### Testing
 
-- **Fast tier (`tests/test_meshes.py`)**: no Aldebaran file and no network. The tests build an archive of their own at test time: small hand-written OBJs, a PNG and a manifest, zipped and encrypted with the `zip` command (skipped if `zip` is missing). The archive is served through a monkeypatched download function, with the pins monkeypatched to its hashes. These tests cover:
+- **Fast tier (`tests/test_meshes.py`)**: no Aldebaran file and no network. The tests build an archive of their own at test time: small hand-written OBJs, a PNG and a manifest, zipped and encrypted with ZipCrypto by a small writer in `tests/mesh_archive.py` (Python's `zipfile` only reads encrypted entries, and Windows has no `zip` command), shaped as `zip -r -e` shapes it: deflated files, unencrypted folder entries. Info-ZIP's `unzip -t` accepts its archives and refuses a wrong password. The archive is served through a monkeypatched download function, with the pins monkeypatched to its hashes. These tests cover:
   - the acceptance prompt: only `yes` proceeds, while `y`, an empty line, EOF and a non-terminal stdin abort before any archive download;
   - wrong license and archive hashes;
   - unlocking, and a path-escaping entry refused;
@@ -95,7 +95,7 @@ There is no command to export the meshes or a model that includes them, and no c
   - the visual table against the URDF;
   - the **asset guard**: `git ls-files` lists no `.dae`, `.stl`, `.obj`, `.msh`, `.run` or `.zip`, nor a texture image outside the docs, and `src/naoqi_viewer/` holds none.
 - **E2e tier (`tests-e2e/test_meshes_live.py`)**: runs against a real install. It **skips** when `installed()` is `None`, unless `NAOQI_VIEWER_REQUIRE_MESHES` is set, which turns the skip into a failure. It needs no NAOqi: it loads `load_world(variant="aldebaran")`, poses it with `PoseWriter`, renders offscreen, and checks that every table body carries a mesh geom and that the render differs from the placeholder one.
-- **CI (`meshes` job, [ci.md](ci.md))**: `scripts/ci_fetch_meshes.py` runs `naoqi-viewer fetch-meshes` under a pseudo-terminal (the standard library's `pty`) and types `yes`. Then `pytest tests-e2e/test_meshes_live.py` runs with `NAOQI_VIEWER_REQUIRE_MESHES=1`. The archive is fetched on every run and never cached.
+- **CI (`meshes` job, [ci.md](ci.md))**: `scripts/ci_fetch_meshes.py` runs `naoqi-viewer fetch-meshes` under a pseudo-terminal (the standard library's `pty`) and types `yes`. Then `pytest tests-e2e/test_meshes_live.py` runs with `NAOQI_VIEWER_REQUIRE_MESHES=1`. The archive is fetched on every run and never cached. `pty` is POSIX only: the driver's two fast-tier tests skip on Windows, and the `meshes` job runs on Linux. What is platform-specific in the meshes (the data directory, extraction, paths handed to MuJoCo) is covered on all three platforms by the fast tier's test-built archive.
 
 ## Open questions
 

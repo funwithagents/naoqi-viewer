@@ -292,7 +292,8 @@ def main(argv: list[str] | None = None) -> int:
             return fail(
                 f"a headless viewer cannot render offscreen with {backend} "
                 f"({_describe(exc)}); on Linux install Mesa's EGL (libegl1 libopengl0 libgl1-mesa-dri on "
-                "Debian/Ubuntu), or set MUJOCO_GL=osmesa with libosmesa6"
+                "Debian/Ubuntu), or set MUJOCO_GL=osmesa with libosmesa6; on Windows without a "
+                "GPU driver, put Mesa's opengl32.dll and libgallium_wgl.dll next to python.exe"
             )
 
     listener = socket.create_server(("127.0.0.1", 0))

@@ -1,3 +1,4 @@
+import json
 import os
 import socket
 import subprocess
@@ -285,7 +286,7 @@ def test_a_missing_scene_file_is_a_startup_error(
     capsys: pytest.CaptureFixture[str], tmp_path
 ):
     missing = tmp_path / "lab.xml"
-    assert main([f'{{"world": {{"scene": "{missing}"}}}}']) == 1
+    assert main([json.dumps({"world": {"scene": str(missing)}})]) == 1
     assert (
         capsys.readouterr().out.strip()
         == f"NAOQI_VIEWER_ERROR scene file not found: {missing}"

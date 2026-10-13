@@ -228,6 +228,10 @@ def test_run_headless_poses_the_model_each_frame_until_stopped(world: mujoco.MjM
     assert time.monotonic() - started >= 8 / 60 * 0.9  # paced at the frame rate
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="MuJoCo renders offscreen on Windows through GLFW itself, in a hidden window",
+)
 def test_a_headless_viewer_process_does_not_load_the_window_stack():
     # With the environment launch() gives a headless viewer: on Linux, MuJoCo's default
     # backend is GLFW itself, which MUJOCO_GL=egl replaces.

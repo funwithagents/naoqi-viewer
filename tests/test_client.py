@@ -317,23 +317,40 @@ def test_a_headless_viewer_on_linux_renders_through_egl_by_default(
     monkeypatch.delenv("MUJOCO_GL", raising=False)
     monkeypatch.setenv("NAO_SOMETHING", "kept")
     env = client._viewer_env(HEADLESS)
-    assert env is not None
     assert env["MUJOCO_GL"] == "egl" and env["NAO_SOMETHING"] == "kept"
-    assert client._viewer_env(SIM) is None  # a window: the environment as it is
+    assert "MUJOCO_GL" not in client._viewer_env(SIM)  # a window: MuJoCo's own backend
 
 
 def test_the_callers_mujoco_gl_wins(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setenv("MUJOCO_GL", "osmesa")
-    assert (
-        client._viewer_env(HEADLESS) is None
-    )  # inherited, so osmesa reaches the viewer
+    assert client._viewer_env(HEADLESS)["MUJOCO_GL"] == "osmesa"
 
 
-def test_macos_keeps_mujocos_own_offscreen_backend(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(sys, "platform", "darwin")
+@pytest.mark.parametrize("platform", ["darwin", "win32"])
+def test_macos_and_windows_keep_mujocos_own_offscreen_backend(
+    monkeypatch: pytest.MonkeyPatch, platform: str
+):
+    monkeypatch.setattr(sys, "platform", platform)
     monkeypatch.delenv("MUJOCO_GL", raising=False)
-    assert client._viewer_env(HEADLESS) is None
+    assert "MUJOCO_GL" not in client._viewer_env(HEADLESS)
+
+
+def test_a_non_ascii_path_reaches_the_launch_error_intact(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    # Japanese is outside Windows' legacy code pages: the viewer process must print it in UTF-8,
+    # and launch() read it as UTF-8, whatever the locale.
+    monkeypatch.undo()  # the real viewer process
+    # A Windows code page in the caller's environment, on any machine.
+    monkeypatch.setenv("PYTHONIOENCODING", "cp1252")
+    scene = tmp_path / "ナオ" / "scene.xml"
+    config = NaoqiViewerConfig(
+        mode="sim", naoqi=NaoqiSettings(url=URL), world=WorldSettings(scene=str(scene))
+    )
+    with pytest.raises(LaunchError) as raised:
+        NaoqiViewer(config).launch()
+    assert f"scene file not found: {scene}" in str(raised.value)
 
 
 def test_importing_naoqi_viewer_loads_neither_mujoco_nor_qi():
