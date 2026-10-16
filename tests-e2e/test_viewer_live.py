@@ -70,6 +70,8 @@ def test_sim_mode_serves_real_camera_frames():
 def test_mirror_mode_opens_and_reports_status():
     url = require_env("NAOQI_URL")
     require_window()
-    with NaoqiViewer.from_dict({"naoqi": {"url": url}}) as viewer:
+    with NaoqiViewer.from_dict(
+        {"naoqi": {"url": url}, "cameras_display": True}
+    ) as viewer:
         assert viewer.config.mode == "mirror"
         assert viewer.status().url == url

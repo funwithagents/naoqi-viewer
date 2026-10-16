@@ -22,6 +22,7 @@ import mujoco
 import numpy as np
 
 from naoqi_viewer import protocol
+from naoqi_viewer.cameras import CameraSource
 from naoqi_viewer.config import ConfigError, NaoqiViewerConfig, is_scene_path
 from naoqi_viewer.model import load_world, resolve_variant
 from naoqi_viewer.source import NaoqiSource, PoseSource, Sample
@@ -298,6 +299,7 @@ def main(argv: list[str] | None = None) -> int:
 
     listener = socket.create_server(("127.0.0.1", 0))
     source = NaoqiSource(url, rate_hz=config.naoqi.rate_hz, commanded=config.ghost)
+    cameras = CameraSource(url) if config.cameras_display else None
     server = RequestServer(
         listener,
         mode=mode,
@@ -316,6 +318,7 @@ def main(argv: list[str] | None = None) -> int:
                 source,
                 ghost=config.ghost,
                 attribution=ATTRIBUTION if variant == "aldebaran" else None,
+                cameras=cameras,
                 on_frame=server.on_frame,
                 stop=server.stop,
             )
@@ -326,6 +329,8 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         server.close()
         source.close()
+        if cameras is not None:
+            cameras.close()
         if renderer is not None:
             renderer.close()
     return 0

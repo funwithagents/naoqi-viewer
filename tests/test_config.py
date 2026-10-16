@@ -30,10 +30,12 @@ def test_defaults():
         config.world.scene,
         config.world.variant,
         config.ghost,
+        config.cameras_display,
         config.launch_timeout_s,
     ) == (
         "empty",
         "auto",
+        False,
         False,
         30.0,
     )
@@ -54,6 +56,7 @@ def test_to_dict_round_trips_and_is_json():
         naoqi=NaoqiSettings(url="tcp://10.0.0.7:9600", rate_hz=30),
         world=WorldSettings(scene="table", variant="placeholder"),
         ghost=True,
+        cameras_display=True,
         launch_timeout_s=12,
     )
     data = config.to_dict()
@@ -63,6 +66,7 @@ def test_to_dict_round_trips_and_is_json():
         "naoqi": {"url": "tcp://10.0.0.7:9600", "rate_hz": 30},
         "world": {"scene": "table", "variant": "placeholder"},
         "ghost": True,
+        "cameras_display": True,
         "launch_timeout_s": 12,
     }
     assert NaoqiViewerConfig.from_json(json.dumps(data)) == config
@@ -88,6 +92,12 @@ def test_to_dict_round_trips_and_is_json():
         ({"headless": True}, "headless", "requires mode 'sim'"),
         ({"mode": "mirror", "headless": True}, "headless", "requires mode 'sim'"),
         ({"mode": "sim", "headless": True, "ghost": True}, "ghost", "headless"),
+        ({"cameras_display": 1}, "cameras_display", "must be a boolean"),
+        (
+            {"mode": "sim", "headless": True, "cameras_display": True},
+            "cameras_display",
+            "headless",
+        ),
         ({"launch_timeout_s": 0}, "launch_timeout_s", "positive, finite"),
     ],
 )
@@ -96,6 +106,12 @@ def test_errors_name_the_key(data: Any, key: str, detail: str):
     assert error.key == key
     assert detail in error.detail
     assert str(error).startswith(f"{key} ")
+
+
+def test_the_camera_display_is_valid_in_both_modes():
+    for mode in ("mirror", "sim"):
+        config = NaoqiViewerConfig.from_dict({"mode": mode, "cameras_display": True})
+        assert config.cameras_display is True
 
 
 def test_non_finite_numbers_are_rejected():

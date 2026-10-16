@@ -22,6 +22,7 @@ from naoqi_viewer import (
     protocol,
     viewer_process,
 )
+from naoqi_viewer.cameras import CameraSource
 from naoqi_viewer.model import NaoPose, PoseWriter, load_world
 from naoqi_viewer.source import Sample, TargetInfo
 from naoqi_viewer.viewer_process import OffscreenRenderer, RequestServer, main
@@ -308,6 +309,31 @@ def test_a_headless_viewer_that_cannot_render_is_a_startup_error(
         "(RuntimeError: no OpenGL context)"
     )
     assert "libegl1 libopengl0 libgl1-mesa-dri" in out
+
+
+def test_the_camera_source_exists_only_with_cameras_display(
+    mock_naoqi: tuple[str, MockNaoqi], monkeypatch: pytest.MonkeyPatch
+):
+    url, mock = mock_naoqi
+    seen: list[object] = []
+
+    def fake_run(model: mujoco.MjModel, source: object, **kwargs: object) -> None:
+        cameras = kwargs.get("cameras")
+        seen.append(cameras)
+        if cameras is not None:  # the window would run here: let the source subscribe
+            deadline = time.monotonic() + 5
+            while not mock.subscribers():
+                assert time.monotonic() < deadline, "the camera source never subscribed"
+                time.sleep(0.02)
+
+    monkeypatch.setattr(viewer_process, "run", fake_run)
+    assert main([json.dumps({"naoqi": {"url": url}})]) == 0
+    assert seen == [None]
+    assert not [c for c in mock.calls if c[0] == "ALVideoDevice"]
+
+    assert main([json.dumps({"naoqi": {"url": url}, "cameras_display": True})]) == 0
+    assert isinstance(seen[1], CameraSource)
+    assert mock.subscribers() == []  # closed, and unsubscribed, with the viewer
 
 
 # --- A real headless viewer process -------------------------------------------------

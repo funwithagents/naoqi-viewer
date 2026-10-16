@@ -4,10 +4,21 @@ posing with no window, for a headless viewer."""
 import threading
 import time
 from collections.abc import Callable
+from typing import Any
 
 import mujoco
 import numpy as np
 
+from naoqi_viewer.cameras import (
+    CAMERA_NAMES,
+    IMAGE_STALE_AFTER,
+    ImageSource,
+    Rect,
+    framed,
+    picture_rects,
+    placeholder,
+    resample_nearest,
+)
 from naoqi_viewer.model import PoseWriter
 from naoqi_viewer.source import PoseSource, Sample
 
@@ -17,8 +28,9 @@ ATTRIBUTION = "NAO meshes © Aldebaran, CC BY-NC-ND 4.0"
 GHOST_RGBA = (0.35, 0.65, 1.0, 0.3)
 GHOST_MIN_OFFSET = 0.001  # m: closer bodies get no ghost
 GHOST_MIN_TURN = 0.025  # Frobenius distance between rotations, about 0.5°
-# GLFW_KEY_F9: letters and digits are all MuJoCo shortcuts already.
+# GLFW_KEY_F9 and F10: letters and digits are all MuJoCo shortcuts already.
 KEY_TOGGLE_STATUS = 298
+KEY_TOGGLE_CAMERAS = 299
 
 _VISUAL_GROUP = 1
 
@@ -26,6 +38,8 @@ _VISUAL_GROUP = 1
 Text = tuple[int | None, int | None, str | None, str | None]
 # Called between frames with the model, its data and the sample it is posed with.
 FrameHook = Callable[[mujoco.MjModel, mujoco.MjData, Sample | None], None]
+# A camera picture: where it goes in the view, and the RGB image of exactly that size.
+Picture = tuple[Rect, np.ndarray]
 
 
 def _robot_visuals_option() -> mujoco.MjvOption:
@@ -45,10 +59,16 @@ class ViewerState:
         *,
         ghost: bool = False,
         attribution: str | None = None,
+        cameras: ImageSource | None = None,
     ) -> None:
         self.model = model
         self.data = mujoco.MjData(model)
         self.show_status = True
+        self.show_cameras = True
+        self._cameras = cameras
+        self._drawn: tuple[Rect, tuple[int, ...], bool] | None = (
+            None  # last pictures_changed key
+        )
         self.sample: Sample | None = None  # the sample the model is posed with
         self._source = source
         self._writer = PoseWriter(model)
@@ -132,30 +152,89 @@ class ViewerState:
             )
         return texts
 
+    def pictures(self, viewport: Rect) -> list[Picture] | None:
+        """The camera pictures to draw in `viewport` (left, bottom, width, height): the top
+        camera's and the bottom camera's, each resampled to its rectangle and framed, a dark
+        placeholder before a camera's first image. None when there are no cameras, they are
+        hidden (F10), or the view is too small for them."""
+        if self._cameras is None or not self.show_cameras:
+            return None
+        rects = picture_rects(viewport)
+        if rects is None:
+            return None
+        pictures: list[Picture] = []
+        for camera, rect in zip(CAMERA_NAMES, rects, strict=True):
+            size = (rect[2], rect[3])
+            image = self._cameras.latest(camera)
+            picture = (
+                placeholder(size)
+                if image is None
+                else framed(resample_nearest(image.image, size))
+            )
+            pictures.append((rect, picture))
+        return pictures
+
+    def pictures_changed(self, viewport: Rect) -> bool:
+        """Whether `pictures(viewport)` differs from what was drawn when this last returned True:
+        a new image for either camera, a resized view, or the F10 toggle. Always False without
+        cameras."""
+        if self._cameras is None:
+            return False
+        seqs = tuple(
+            image.seq if (image := self._cameras.latest(camera)) is not None else 0
+            for camera in CAMERA_NAMES
+        )
+        key = (viewport, seqs, self.show_cameras)
+        if key == self._drawn:
+            return False
+        self._drawn = key
+        return True
+
     def on_key(self, key: int) -> None:
         if key == KEY_TOGGLE_STATUS:
             self.show_status = not self.show_status
+        elif key == KEY_TOGGLE_CAMERAS:
+            self.show_cameras = not self.show_cameras
 
     def _status(self, now: float) -> tuple[list[str], list[str]]:
         info = self._source.info
         sample = self._source.latest()
-        if sample is None:
-            age = "NO DATA"
-        elif now - sample.received_at > STALE_AFTER:
-            age = "STALE"
-        else:
-            age = f"{(now - sample.received_at) * 1000:.0f} ms"
+        age = _age_text(
+            None if sample is None else sample.received_at, now, STALE_AFTER, "NO DATA"
+        )
         if info is None:
-            return ["connecting", "data age"], ["", age]
-        return (
-            [info.target, "NAOqi", "rate", "data age"],
-            [
+            labels, values = ["connecting", "data age"], ["", age]
+        else:
+            labels = [info.target, "NAOqi", "rate", "data age"]
+            values = [
                 info.url,
                 info.naoqi_version or "unknown",
                 f"{self._source.rate():.0f} Hz",
                 age,
-            ],
-        )
+            ]
+        if self._cameras is not None:
+            for camera in CAMERA_NAMES:
+                image = self._cameras.latest(camera)
+                labels.append(f"{camera} camera")
+                values.append(
+                    _age_text(
+                        None if image is None else image.received_at,
+                        now,
+                        IMAGE_STALE_AFTER,
+                        "NO IMAGE",
+                    )
+                )
+        return labels, values
+
+
+def _age_text(
+    received_at: float | None, now: float, stale_after: float, missing: str
+) -> str:
+    if received_at is None:
+        return missing
+    if now - received_at > stale_after:
+        return "STALE"
+    return f"{(now - received_at) * 1000:.0f} ms"
 
 
 def run(
@@ -164,18 +243,22 @@ def run(
     *,
     ghost: bool = False,
     attribution: str | None = None,
+    cameras: ImageSource | None = None,
     on_frame: FrameHook | None = None,
     stop: threading.Event | None = None,
 ) -> None:
     """Show the robot in a MuJoCo window until it is closed or `stop` is set. On macOS, needs mjpython.
 
     `on_frame(model, data, sample)` runs between frames, on this thread, with the sample the model
-    is posed with.
+    is posed with. With `cameras`, the head cameras' pictures are drawn in the view's top-right
+    corner.
     """
     import mujoco.viewer  # the window stack (GLFW), which a headless viewer never loads
 
     stop = stop or threading.Event()
-    state = ViewerState(model, source, ghost=ghost, attribution=attribution)
+    state = ViewerState(
+        model, source, ghost=ghost, attribution=attribution, cameras=cameras
+    )
     with mujoco.viewer.launch_passive(
         model,
         state.data,
@@ -195,10 +278,30 @@ def run(
                 state.update()
                 state.draw_ghost(handle.user_scn)
             handle.set_texts(state.texts(time.monotonic()))
+            if cameras is not None:
+                _draw_pictures(handle, state)
             if on_frame is not None:
                 on_frame(model, state.data, state.sample)
             handle.sync()
             ticks.wait()
+
+
+def _draw_pictures(handle: Any, state: ViewerState) -> None:
+    """Set the camera pictures on the passive viewer `handle` when they changed. Called outside
+    `handle.lock()`: `set_images` waits for the render thread, which needs that lock."""
+    viewport = handle.viewport
+    if viewport is None:
+        return
+    rect: Rect = (viewport.left, viewport.bottom, viewport.width, viewport.height)
+    if not state.pictures_changed(rect):
+        return
+    pictures = state.pictures(rect)
+    if pictures is None:
+        handle.clear_images()
+    else:
+        handle.set_images(
+            [(mujoco.MjrRect(*where), image) for where, image in pictures]
+        )
 
 
 def run_headless(

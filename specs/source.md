@@ -11,7 +11,7 @@ tests:
 
 ## Purpose
 
-Where the robot's pose comes from. The viewer asks a source for the latest sample on every frame and never waits on NAOqi. Everything qi-related on the read side (connecting, reconnecting, polling, identifying the target) lives here, behind one small interface.
+Where the robot's pose comes from. The viewer asks a source for the latest sample on every frame and never waits on NAOqi. Everything qi-related on the pose's read side (connecting, reconnecting, polling, identifying the target) lives here, behind one small interface. The camera images are a second reader of the same shape, `CameraSource` in [cameras.md](cameras.md), which shares `connect()` and this spec's reconnection rules.
 
 ## Decided
 

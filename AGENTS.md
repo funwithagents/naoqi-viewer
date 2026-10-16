@@ -29,6 +29,7 @@ Where things live. This is a coarse, module-level map — for the full file inve
 |---|---|---|
 | [`src/naoqi_viewer/__init__.py`](src/naoqi_viewer/__init__.py) | Package glue (exempt from the spec rule) | — |
 | [`src/naoqi_viewer/source.py`](src/naoqi_viewer/source.py) | Pose sources: `connect` in one cancellable attempt, `NaoqiSource` polling NAOqi with reconnection and target identification | [source.md](specs/source.md) |
+| [`src/naoqi_viewer/cameras.py`](src/naoqi_viewer/cameras.py) | Camera display: `CameraSource` reading both head cameras from NAOqi's `ALVideoDevice` (one subscription, reconnection, no leaked subscriptions) and the layout of their pictures in the window | [cameras.md](specs/cameras.md) |
 | [`src/naoqi_viewer/config.py`](src/naoqi_viewer/config.py) | `NaoqiViewerConfig`: the viewer's declarative config, its loaders and `ConfigError` | [config.md](specs/config.md) |
 | [`src/naoqi_viewer/client.py`](src/naoqi_viewer/client.py) | The caller's side: `NaoqiViewer`, built from a config, launching and driving a viewer process (standard library + numpy only) | [api.md](specs/api.md) |
 | [`src/naoqi_viewer/protocol.py`](src/naoqi_viewer/protocol.py) | Message framing between a caller and its viewer process | [api.md](specs/api.md) |

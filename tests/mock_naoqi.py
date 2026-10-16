@@ -5,6 +5,7 @@ exercised for real. It implements only what naoqi-viewer calls (specs/testing.md
 """
 
 import threading
+import time
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal
 
@@ -83,6 +84,48 @@ class _Memory:
         self._mock._call("ALMemory", "insertData", key, value)
 
 
+class _VideoDevice:
+    """ALVideoDevice as naoqi-viewer's camera display uses it (specs/cameras.md): named
+    subscriptions NAOqi suffixes `_0` to `_5` and refuses beyond, and images in NAOqi's list
+    layout."""
+
+    def __init__(self, mock: "MockNaoqi") -> None:
+        self._mock = mock
+
+    def subscribeCameras(
+        self,
+        name: str,
+        cameraIndexes: Any,
+        resolutions: Any,
+        colorSpaces: Any,
+        fps: int,
+    ) -> str:
+        return self._mock._call(
+            "ALVideoDevice",
+            "subscribeCameras",
+            name,
+            cameraIndexes,
+            resolutions,
+            colorSpaces,
+            fps,
+        )
+
+    # Bound with NAOqi's signature, so the pixels travel as a qi raw buffer (a `bytearray` on the
+    # client), as they do from a robot: a plain `bytes` inside a dynamic value becomes a string.
+    @qi.bind(returnType="[(iiiiiiriffff)]", paramsType=(qi.String,))
+    def getImagesRemote(self, name: str) -> list[Any]:
+        return self._mock._call("ALVideoDevice", "getImagesRemote", name)
+
+    def unsubscribe(self, name: str) -> bool:
+        return self._mock._call("ALVideoDevice", "unsubscribe", name)
+
+    def unsubscribeAllInstances(self, name: str) -> bool:
+        return self._mock._call("ALVideoDevice", "unsubscribeAllInstances", name)
+
+    def getSubscribers(self) -> list[str]:
+        return self._mock._call("ALVideoDevice", "getSubscribers")
+
+
 class _NaoqiSim:
     def ping(self) -> bool:
         return True
@@ -116,6 +159,10 @@ class MockNaoqi:
         self._effector_errors: dict[str, np.ndarray] = {}
         self._clips: dict[str, tuple[float, float]] = {}
         self._memory: dict[str, Any] = {}
+        self._subscriptions: dict[
+            str, list[int]
+        ] = {}  # subscription name -> camera indexes
+        self._images: dict[int, np.ndarray] = {}  # camera index -> RGB image
         self._failure: str | None = None
         self._session: Any = None
         self.url = "tcp://127.0.0.1:0"
@@ -134,6 +181,7 @@ class MockNaoqi:
         )
         session.registerService("ALMotion", _Motion(self))
         session.registerService("ALMemory", _Memory(self))
+        session.registerService("ALVideoDevice", _VideoDevice(self))
         if self.target == "naoqi-sim":
             with self._lock:
                 # naoqi-sim publishes its own version too: identification must not read it.
@@ -152,8 +200,11 @@ class MockNaoqi:
             self._session = None
 
     def restart(self) -> None:
-        """Serve again on the same port, as a restarted NAOqi would (with the current `target`)."""
+        """Serve again on the same port, as a restarted NAOqi would (with the current `target`,
+        and without the camera subscriptions, which a NAOqi loses when it restarts)."""
         self.disconnect()
+        with self._lock:
+            self._subscriptions.clear()
         self.start()
 
     def close(self) -> None:
@@ -186,8 +237,23 @@ class MockNaoqi:
         with self._lock:
             self._clips[name] = (low, high)
 
+    def set_image(self, camera: str, image: np.ndarray | None) -> None:
+        """What `getImagesRemote` serves for `camera` ("top" or "bottom"): an RGB uint8 image,
+        or None for a camera with nothing to serve (as a NAOqi without that camera)."""
+        index = {"top": 0, "bottom": 1}[camera]
+        with self._lock:
+            if image is None:
+                self._images.pop(index, None)
+            else:
+                self._images[index] = np.ascontiguousarray(image, dtype=np.uint8)
+
+    def subscribers(self) -> list[str]:
+        """The live ALVideoDevice subscription names."""
+        with self._lock:
+            return list(self._subscriptions)
+
     def fail_calls(self, message: str | None) -> None:
-        """Make every ALMotion call raise `message` (None: back to normal)."""
+        """Make every ALMotion and ALVideoDevice call raise `message` (None: back to normal)."""
         with self._lock:
             self._failure = message
 
@@ -200,7 +266,7 @@ class MockNaoqi:
     def _call(self, service: str, method: str, *args: Any) -> Any:
         with self._lock:
             self.calls.append((service, method, args))
-            if service == "ALMotion" and self._failure is not None:
+            if service in ("ALMotion", "ALVideoDevice") and self._failure is not None:
                 raise RuntimeError(self._failure)
             return getattr(self, f"_{method}")(*args)
 
@@ -261,3 +327,57 @@ class MockNaoqi:
 
     def _insertData(self, key: str, value: Any) -> None:
         self._memory[key] = value
+
+    def _subscribeCameras(
+        self, name: str, indexes: Any, resolutions: Any, colorspaces: Any, fps: int
+    ) -> str:
+        for n in range(6):
+            candidate = f"{name}_{n}"
+            if candidate not in self._subscriptions:
+                self._subscriptions[candidate] = [int(i) for i in indexes]
+                return candidate
+        raise RuntimeError(
+            f"ALVideoDevice.subscribeCameras: too many instances of {name!r}"
+        )
+
+    def _getImagesRemote(self, name: str) -> list[Any]:
+        if name not in self._subscriptions:
+            return []
+        now = time.time()
+        seconds, micros = int(now), int((now - int(now)) * 1e6)
+        reply: list[Any] = []
+        for index in self._subscriptions[name]:
+            image = self._images.get(index)
+            if image is None:  # a camera with nothing to serve: no size, no bytes
+                reply.append([0, 0, 0, 11, 0, 0, b"", index, 0.0, 0.0, 0.0, 0.0])
+                continue
+            height, width = image.shape[:2]
+            reply.append(
+                [
+                    width,
+                    height,
+                    3,
+                    11,
+                    seconds,
+                    micros,
+                    image.tobytes(),
+                    index,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                ]
+            )
+        return reply
+
+    def _unsubscribe(self, name: str) -> bool:
+        return self._subscriptions.pop(name, None) is not None
+
+    def _unsubscribeAllInstances(self, name: str) -> bool:
+        instances = [n for n in self._subscriptions if n.rsplit("_", 1)[0] == name]
+        for instance in instances:
+            del self._subscriptions[instance]
+        return bool(instances)
+
+    def _getSubscribers(self) -> list[str]:
+        return list(self._subscriptions)
