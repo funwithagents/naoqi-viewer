@@ -5,17 +5,22 @@ import time
 from dataclasses import dataclass, field
 
 import mujoco
+import numpy as np
 import pytest
 
 from naoqi_viewer import NaoqiViewerConfig, client
+from naoqi_viewer.cameras import CameraImage
 from naoqi_viewer.model import NaoPose, load_world
 from naoqi_viewer.source import Sample, TargetInfo
 from naoqi_viewer.viewer import (
     ATTRIBUTION,
+    KEY_TOGGLE_CAMERAS,
     KEY_TOGGLE_STATUS,
     ViewerState,
     run_headless,
 )
+
+VIEW = (0, 0, 1600, 1000)
 
 UPRIGHT = ((0.0, 0.0, 0.3332), (1.0, 0.0, 0.0, 0.0))
 RIGHT_ARM_BODIES = {"RShoulder", "RBicep", "RElbow", "RForeArm", "r_wrist"}
@@ -54,6 +59,36 @@ class FakeSource:
             time.monotonic() - age,
         )
         return self.sample
+
+
+@dataclass
+class FakeCameras:
+    """An ImageSource whose images the test sets directly."""
+
+    images: dict[str, CameraImage] = field(default_factory=dict)
+    seq: int = 0
+
+    def latest(self, camera: str) -> CameraImage | None:
+        return self.images.get(camera)
+
+    def rate(self) -> float:
+        return 10.0
+
+    def close(self) -> None:
+        pass
+
+    def push(self, camera: str, blue: int, age: float = 0.0) -> CameraImage:
+        self.seq += 1
+        image = np.zeros((240, 320, 3), dtype=np.uint8)
+        image[..., 2] = blue
+        self.images[camera] = CameraImage(
+            camera,  # type: ignore[arg-type]
+            image,
+            self.seq,
+            time.monotonic() - age,
+            None,
+        )
+        return self.images[camera]
 
 
 @pytest.fixture(scope="module")
@@ -146,6 +181,77 @@ def test_attribution_only_when_given(world: mujoco.MjModel):
     with_meshes = ViewerState(world, FakeSource(), attribution=ATTRIBUTION)
     with_meshes.on_key(KEY_TOGGLE_STATUS)
     assert bottom_right(with_meshes) == [ATTRIBUTION]
+
+
+def test_camera_pictures_fill_both_slots_top_camera_first(world: mujoco.MjModel):
+    cameras = FakeCameras()
+    state = ViewerState(world, FakeSource(), cameras=cameras)
+    pictures = state.pictures(VIEW)
+    assert pictures is not None and len(pictures) == 2
+    (top_rect, top), (bottom_rect, bottom) = pictures
+    assert top_rect[1] > bottom_rect[1]  # the top camera's picture is the higher one
+    assert top.shape == (top_rect[3], top_rect[2], 3) == (300, 400, 3)
+    assert top[150, 200].tolist() == [40, 40, 40]  # a placeholder before any image
+    assert top[0, 0].tolist() == [220, 220, 220]  # framed
+
+    cameras.push("top", 7)
+    pictures = state.pictures(VIEW)
+    assert pictures is not None
+    (_, top), (_, bottom) = pictures
+    assert top[150, 200].tolist() == [0, 0, 7] and top[0, 0].tolist() == [220, 220, 220]
+    assert bottom[150, 200].tolist() == [40, 40, 40]  # still waiting
+
+    assert state.pictures((0, 0, 100, 80)) is None  # too small a view
+
+
+def test_pictures_change_on_new_images_resizes_and_f10_only(world: mujoco.MjModel):
+    cameras = FakeCameras()
+    state = ViewerState(world, FakeSource(), cameras=cameras)
+    assert state.pictures_changed(VIEW)  # the first draw
+    assert not state.pictures_changed(VIEW)
+    cameras.push("bottom", 1)
+    assert state.pictures_changed(VIEW) and not state.pictures_changed(VIEW)
+    assert state.pictures_changed((0, 0, 1200, 800))  # resized
+    state.on_key(KEY_TOGGLE_CAMERAS)
+    assert state.pictures_changed((0, 0, 1200, 800))
+    assert state.pictures((0, 0, 1200, 800)) is None  # hidden
+    state.on_key(KEY_TOGGLE_CAMERAS)
+    assert state.pictures_changed((0, 0, 1200, 800))
+    assert state.pictures((0, 0, 1200, 800)) is not None
+
+    plain = ViewerState(world, FakeSource())
+    assert plain.pictures(VIEW) is None and not plain.pictures_changed(VIEW)
+    plain.on_key(KEY_TOGGLE_CAMERAS)  # harmless without cameras
+    assert not plain.pictures_changed(VIEW)
+
+
+def test_camera_status_lines(world: mujoco.MjModel):
+    cameras = FakeCameras()
+    source = FakeSource(info=TargetInfo("tcp://nao.local:9559", "real", "2.1.4.13"))
+    state = ViewerState(world, source, cameras=cameras)
+    source.push({})
+    left, right = status_lines(state)
+    assert left.splitlines()[-2:] == ["top camera", "bottom camera"]
+    assert right.splitlines()[-2:] == ["NO IMAGE", "NO IMAGE"]
+
+    cameras.push("top", 1, age=0.08)
+    cameras.push("bottom", 2, age=1.2)
+    _, right = status_lines(state)
+    top, bottom = right.splitlines()[-2:]
+    assert top.endswith(" ms") and 80 <= int(top.removesuffix(" ms")) < 1000
+    assert bottom == "STALE"
+
+    before_connection = ViewerState(world, FakeSource(), cameras=cameras)
+    left, _ = status_lines(before_connection)
+    assert left.splitlines() == [
+        "connecting",
+        "data age",
+        "top camera",
+        "bottom camera",
+    ]
+
+    state.on_key(KEY_TOGGLE_STATUS)
+    assert status(state) is None  # F9 hides the camera lines with the rest
 
 
 def visible_ghost_bodies(state: ViewerState, scene: mujoco.MjvScene) -> set[str]:

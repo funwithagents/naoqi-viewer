@@ -14,7 +14,7 @@ naoqi-viewer is one of the three packages of the NAO toolkit (naoqi-bridge, naoq
 | Camera frames | Refused: a real robot has its own cameras | RGB renders from `CameraTop` / `CameraBottom` at the robot's current pose |
 | Headless | No | Yes: offscreen rendering, with no display or GPU needed |
 
-The window shows a status overlay (target, NAOqi version, update rate, data age; toggle it with `F9`). It can also show a **ghost**: a translucent copy of the commanded pose drawn over the measured one, which shows limbs that are blocked or have stiffness off.
+The window shows a status overlay (target, NAOqi version, update rate, data age, and the camera images' age when they are shown; toggle it with `F9`). It can also show a **ghost**: a translucent copy of the commanded pose drawn over the measured one, which shows limbs that are blocked or have stiffness off.
 
 ## Install
 
@@ -59,13 +59,15 @@ All settings for `view` come from one JSON file. Every key is optional, and miss
   "naoqi": { "url": "tcp://127.0.0.1:9559", "rate_hz": 50 },
   "world": { "scene": "empty", "variant": "auto" },
   "ghost": false,
+  "cameras_display": false,
   "launch_timeout_s": 30
 }
 ```
 
 - `world.scene` takes a bundled scene (`empty`, or `table`, which gives the cameras something to see) or a path to your own MJCF file ending in `.xml`. A relative path is resolved against the config file's directory.
 - `world.variant` can be `auto`, `placeholder` or `aldebaran`. `auto` uses Aldebaran's meshes when they are installed and the placeholder visuals otherwise.
-- `headless: true` works only in `sim` mode, and cannot be combined with `ghost`.
+- `cameras_display: true` shows the two head cameras, read from NAOqi's `ALVideoDevice`, as pictures in the window's top-right corner (toggle them with `F10`). It works in both modes: on a real robot they are its cameras, on naoqi-sim the frames it injected. It costs NAOqi one camera subscription (QVGA at 10 fps), which the viewer removes when it closes.
+- `headless: true` works only in `sim` mode, and cannot be combined with `ghost` or `cameras_display`.
 - An unknown key or a bad value fails at load time, and the error names the key, for example `naoqi.rate_hz must be a positive, finite number, got 0`.
 
 Ready-made files are in [examples/configs/](examples/configs/): `mirror.json`, `sim-table.json` and `sim-headless.json`.

@@ -19,7 +19,8 @@ This overview is the map of the whole project. Each concept has its own spec (se
 | --- | --- |
 | The NAO model: MJCF, joints, sensors, cameras, effector sites, placeholder visuals | Physics: the viewer never calls `mj_step`; the pose comes only from NAOqi |
 | Mirror mode: watching any NAO, with a status overlay and a ghost of the commanded pose | Writing to NAOqi: the viewer is read-only (only `check-model` moves joints, and refuses a real robot by default) |
-| Sim mode: scenes around the robot, head-camera renders on request, windowed or headless | Anything NAOqi-specific about cameras (colorspaces, subscriptions, `putImage`): naoqi-sim owns it |
+| Sim mode: scenes around the robot, head-camera renders on request, windowed or headless | Serving camera images to NAOqi clients (`putImage`, the colorspaces apps are served): naoqi-sim owns it |
+| Camera display: the two head cameras read from `ALVideoDevice` as pictures in the window, in both modes | Processing those images (detection, recording): the viewer only shows them |
 | `check-model`: the forward-kinematics cross-check against NAOqi | A client API for NAO applications: that is naoqi-bridge |
 | `fetch-meshes`: license-gated install of Aldebaran's meshes, loaded in place of the placeholders | Any way to export, share or cache converted meshes or a model built from them |
 | A Python API (`NaoqiViewer`, `NaoqiViewerConfig`) and a thin `naoqi-viewer` command | Record and replay of joint trajectories, video recording (not in v1) |
@@ -46,6 +47,7 @@ NaoqiViewerConfig (config.py)            render loop, 60 Hz (viewer.py) ◀─�
 | Protocol | Both | Length-prefixed JSON header plus raw payload over one loopback TCP connection: `hello`, `status`, `camera_frame`, `stop` | [api.md](api.md) |
 | Viewer process | Viewer process | Loads the world, builds the pose source, runs the loop, answers requests between frames on the thread that owns the OpenGL contexts | [api.md](api.md) |
 | Pose source | Viewer process, its own thread | `connect()` in one cancellable attempt; `NaoqiSource` polls measured (and optionally commanded) angles and the torso pose at 50 Hz, reconnects with backoff, identifies the target (`real`, `naoqi-sim`, `virtual`) | [source.md](source.md) |
+| Camera source and display | Viewer process, its own thread; drawn by the window | `CameraSource` subscribes both head cameras in `ALVideoDevice` (QVGA, RGB, 10 fps) and polls them; the window draws the two pictures in its top-right corner, with their age in the status overlay. Off by default (`cameras_display`) | [cameras.md](cameras.md) |
 | Viewer loop | Viewer process, main thread | `launch_passive` window at 60 Hz with the status overlay, ghost and attribution; or the windowless headless loop | [viewer.md](viewer.md) |
 | Model and scenes | Viewer process | `nao.xml`, bundled scenes (`empty`, `table`) or a user MJCF, `load_world`, `NaoPose`, `PoseWriter` | [model.md](model.md) |
 | Meshes | User's machine | `fetch-meshes`: typed license acceptance, then the pinned encrypted archive of [naoqi-meshes](https://github.com/funwithagents/naoqi-meshes) (OBJ and PNG) unlocked locally; `variant: "aldebaran"` swaps the placeholder visuals for them | [meshes.md](meshes.md) |
@@ -62,10 +64,12 @@ Both run the same loop and the same pose source; the mode only decides what the 
 | Scene | `empty` by default, any scene allowed | `empty` by default; a caller sets `table` or its own MJCF to give the cameras something to see |
 | `camera_frame` | Refused (`ModeError`): a real robot has its own cameras | RGB render of `CameraTop`/`CameraBottom` at the current pose |
 | Headless | No (nothing to show) | Yes: offscreen rendering, no display needed (Mesa's EGL on Linux) |
+| Camera display | The robot's cameras from `ALVideoDevice` | The same reader: what naoqi-sim injected into `ALVideoDevice`, the viewer's own renders after their round trip ([cameras.md](cameras.md)) |
 
 ### What naoqi-viewer relies on from a target
 
 - `ALMotion.getBodyNames("Body")`, `getAngles("Body", True/False)`, `getTransform("Torso", 1, True)`; for `check-model` also `setStiffnesses`, `angleInterpolation` and `getTransform(effector, 0, True)`.
+- With the camera display on: `ALVideoDevice.subscribeCameras`, `getImagesRemote`, `unsubscribe` and `unsubscribeAllInstances` ([cameras.md](cameras.md)). In sim mode the images are the ones naoqi-sim put there.
 - Target identification: the `NaoqiSim` service marks a naoqi-sim target, whose NAOqi version is the ALMemory key `NaoqiSim/NaoqiVersion`; `ALSystem` and `systemVersion()` mark a real robot; neither means a desktop virtual robot. These names are a contract with naoqi-sim.
 
 ### Dependencies
@@ -80,12 +84,13 @@ naoqi-viewer depends on libqi (`qi`), `mujoco`, `numpy`, `platformdirs` and `pyy
 | Pose source | Built and tested, against the mock NAOqi and naoqi-sim's NAOqi 2.1 ([source.md](source.md)) |
 | Viewer window and headless loop | Built and tested ([viewer.md](viewer.md)) |
 | Config, `NaoqiViewer` API, viewer process, protocol | Built and tested ([config.md](config.md), [api.md](api.md)) |
+| Camera display (`cameras_display`, `CameraSource`, the pictures) | Built and tested against the mock NAOqi; the live camera test waits for a run against naoqi-sim ([cameras.md](cameras.md)) |
 | `check-model` | Built; passes against NAOqi 2.1 ([check_model.md](check_model.md)) |
 | CLI | `view`, `check-model` and `fetch-meshes` built ([cli.md](cli.md)) |
 | CI | Lint and types, the fast tier with a real headless viewer, the live tier headless and windowed against naoqi-sim's NAOqi 2.1, and the meshes fetched and rendered ([ci.md](ci.md)) |
 | Meshes (`fetch-meshes`, `aldebaran` visuals) | Built; naoqi-meshes `r1` fetched, rendered and tested on macOS ([meshes.md](meshes.md)) |
 | NAOqi 2.8 / NAO V6 | Not validated (model, `check-model`, CI) |
-| Camera streaming, touch from clicks, human figures in scenes | Deferred, each a future protocol op ([api.md](api.md)) |
+| Camera streaming to the caller, touch from clicks, human figures in scenes | Deferred, each a future protocol op ([api.md](api.md)) |
 
 ## Licensing
 

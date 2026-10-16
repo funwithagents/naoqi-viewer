@@ -227,6 +227,7 @@ class NaoqiViewerConfig(JsonConfig):
     naoqi: NaoqiSettings = field(default_factory=NaoqiSettings)
     world: WorldSettings = field(default_factory=WorldSettings)
     ghost: bool = False
+    cameras_display: bool = False  # the head cameras from ALVideoDevice, in the window
     launch_timeout_s: float = 30.0
 
     def __post_init__(self) -> None:
@@ -246,6 +247,11 @@ class NaoqiViewerConfig(JsonConfig):
                 "is drawn only in the window, and a headless viewer has none",
                 key="ghost",
             )
+        if self.headless and self.cameras_display:
+            raise ConfigError(
+                "is drawn only in the window, and a headless viewer has none",
+                key="cameras_display",
+            )
 
     @classmethod
     def parse(cls, data: Any, path: str) -> Self:
@@ -258,6 +264,7 @@ class NaoqiViewerConfig(JsonConfig):
             naoqi=NaoqiSettings.parse,
             world=WorldSettings.parse,
             ghost=_as_bool,
+            cameras_display=_as_bool,
             launch_timeout_s=_as_number,
         )
 

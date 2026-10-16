@@ -4,5 +4,6 @@
   "naoqi": { "url": "tcp://127.0.0.1:9559", "rate_hz": 50 },
   "world": { "scene": "table", "variant": "auto" },
   "ghost": false,
+  "cameras_display": false,
   "launch_timeout_s": 30
 }
