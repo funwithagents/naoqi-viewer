@@ -263,6 +263,15 @@ class _Prop:
 _GEOM_TYPES = {"sphere": 2, "cylinder": 5, "box": 6}  # mjtGeom
 
 
+def _half_extents(shape: Shape, size: tuple[float, ...]) -> Vec3:
+    """The half-sizes of a shape's box in its own frame, from MuJoCo's geom size."""
+    if shape == "sphere":
+        return (size[0], size[0], size[0])
+    if shape == "cylinder":
+        return (size[0], size[0], size[1])
+    return (size[0], size[1], size[2])
+
+
 class Props:
     """The commanded state of a model's pooled props, written into it by `step` on the render
     thread. The other methods may be called from any thread; they take effect at the next step."""
@@ -402,11 +411,11 @@ class Props:
                     self._model.geom_type[prop.geom] = _GEOM_TYPES[prop.shape]
                     self._model.geom_size[prop.geom] = [*prop.size, 0, 0][:3]
                     self._model.geom_rgba[prop.geom] = [*prop.color, alpha]
-                    # The renderer culls by the bounding radius: keep it covering the shape.
-                    self._model.geom_rbound[prop.geom] = (
-                        math.sqrt(sum(v * v for v in prop.size))
-                        if prop.shape != "sphere"
-                        else prop.size[0]
+                    # Keep the bounds the renderer and MuJoCo read covering the new shape.
+                    half = _half_extents(prop.shape, prop.size)
+                    self._model.geom_aabb[prop.geom] = [0, 0, 0, *half]
+                    self._model.geom_rbound[prop.geom] = math.sqrt(
+                        sum(h * h for h in half)
                     )
                 prop.dirty = moving  # the end of a move writes once more
                 moved = True
@@ -424,12 +433,16 @@ class Props:
     def _move(self, prop: _Prop, pos: Vec3, quat: Quat | None, duration: float) -> None:
         now = self._clock()
         current_pos, current_quat, _ = prop.at(now)
-        if quat is None:  # a face looks at the robot from where it goes
+        if (
+            quat is None and prop.kind == "face"
+        ):  # it looks at the robot from where it goes
             quat = (
                 facing(pos, self._data.xpos[self._torso])
                 if self._torso >= 0
                 else FACE_QUAT
             )
+        elif quat is None:  # an object spawned upright, the world's axes
+            quat = IDENTITY
         prop.pos, prop.quat = current_pos, current_quat
         prop.target_pos, prop.target_quat = pos, quat
         prop.start, prop.duration, prop.dirty = now, duration, True

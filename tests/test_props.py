@@ -240,3 +240,16 @@ def test_a_spawned_sphere_is_rendered_and_vanishes_when_hidden(scene):
         props.despawn("object_1")
         props.step()
         assert red_pixels() == 0
+
+
+def test_an_object_stands_upright_whatever_its_place(scene):
+    """With no orientation given, an object keeps the world's axes (a face alone turns to the
+    robot): a box 1 m tall stands on its foot, its long axis vertical, off to the side too."""
+    model, data, props = scene
+    pillar = props.spawn("object", (1.0, 0.8, 0.5), shape="box", size=(0.1, 0.1, 0.5))
+    props.step()
+    assert pillar.quat == (1.0, 0.0, 0.0, 0.0)
+    assert data.xmat[model.body(pillar.name).id] == pytest.approx(np.eye(3).flatten())
+    geom = model.geom(pillar.name).id
+    assert tuple(model.geom_aabb[geom][3:]) == pytest.approx((0.1, 0.1, 0.5))
+    assert model.geom_rbound[geom] == pytest.approx(math.sqrt(0.01 + 0.01 + 0.25))
