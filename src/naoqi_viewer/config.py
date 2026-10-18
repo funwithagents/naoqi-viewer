@@ -231,6 +231,9 @@ class NaoqiViewerConfig(JsonConfig):
     cameras_mirror: bool = (
         True  # those pictures mirrored, to match the view facing the robot
     )
+    people_display: bool = (
+        False  # NAOqi's people from ALMemory, as markers in the window
+    )
     launch_timeout_s: float = 30.0
 
     def __post_init__(self) -> None:
@@ -255,6 +258,11 @@ class NaoqiViewerConfig(JsonConfig):
                 "is drawn only in the window, and a headless viewer has none",
                 key="cameras_display",
             )
+        if self.headless and self.people_display:
+            raise ConfigError(
+                "is drawn only in the window, and a headless viewer has none",
+                key="people_display",
+            )
 
     @classmethod
     def parse(cls, data: Any, path: str) -> Self:
@@ -269,6 +277,7 @@ class NaoqiViewerConfig(JsonConfig):
             ghost=_as_bool,
             cameras_display=_as_bool,
             cameras_mirror=_as_bool,
+            people_display=_as_bool,
             launch_timeout_s=_as_number,
         )
 

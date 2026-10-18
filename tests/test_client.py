@@ -15,6 +15,8 @@ from naoqi_viewer import (
     NaoqiSettings,
     NaoqiViewer,
     NaoqiViewerConfig,
+    PropError,
+    PropState,
     ViewerClosed,
     ViewerStatus,
     WorldSettings,
@@ -196,8 +198,8 @@ def test_launch_times_out_and_stops_the_viewer_process(monkeypatch: pytest.Monke
 
 
 def test_protocol_mismatch_is_a_launch_error(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("NAOQI_FAKE_VIEWER_PROTOCOL", "2")
-    with pytest.raises(LaunchError, match="protocol 2"):
+    monkeypatch.setenv("NAOQI_FAKE_VIEWER_PROTOCOL", "1")  # an older viewer process
+    with pytest.raises(LaunchError, match="protocol 1"):
         NaoqiViewer(SIM).launch()
 
 
@@ -359,3 +361,34 @@ def test_importing_naoqi_viewer_loads_neither_mujoco_nor_qi():
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     )
     assert result.stdout.strip() == "[]"
+
+
+def test_props_calls_go_over_the_wire_and_come_back_as_states(ops_file: Path):
+    with NaoqiViewer(SIM) as viewer:
+        ball = viewer.props.spawn(
+            "object", np.array([1.5, 0.0, 0.5]), size=0.1, color=(0, 1, 0)
+        )
+        assert ball == PropState(
+            "object_1", "object", True, (1.5, 0.0, 0.5), (1.0, 0.0, 0.0, 0.0), False,
+            None, "sphere", (0.1,), (0.0, 1.0, 0.0),
+        )  # fmt: skip
+        face = viewer.props.spawn("face", (1, 0.3, 0.5), name="face_1")
+        assert (face.name, face.image) == ("face_1", "armstrong")
+        assert viewer.props.place("face_1", (1, -0.3, 0.5), duration=2).pos == (
+            1.0, -0.3, 0.5,
+        )  # fmt: skip
+        assert viewer.props.despawn("face_1").visible is False
+        assert set(viewer.props.list()) == {"face_1", "object_1"}
+        assert not any(s.visible for s in viewer.props.clear().values())
+        with pytest.raises(PropError, match="no prop 'nope'"):
+            viewer.props.despawn("nope")
+    assert received_ops(ops_file) == [
+        "hello", "prop_spawn", "prop_spawn", "prop_place", "prop_despawn",
+        "props", "props_clear", "prop_despawn", "stop",
+    ]  # fmt: skip
+
+
+def test_props_in_mirror_mode_raise_without_a_round_trip(ops_file: Path):
+    with NaoqiViewer(MIRROR) as viewer, pytest.raises(ModeError, match="sim mode"):
+        viewer.props.list()
+    assert received_ops(ops_file) == ["hello", "stop"]

@@ -22,18 +22,18 @@ The window: it poses the model from a [pose source](source.md) and draws it, wit
 - Both side panels start hidden; the standard MuJoCo key toggles them.
 - The default camera tracks the `torso` body, so the robot stays in view when it walks. It looks at the robot from the front, slightly to its left (azimuth 150°, elevation −15°, 1.3 m), so the robot's left is on the watcher's right, which is why the camera pictures are mirrored by default ([cameras.md](cameras.md)). Double-click or the usual MuJoCo keys switch to a free camera.
 - **Window title**: the passive viewer has no title argument; it titles its window `MuJoCo : <model name>`. The title is therefore set when the world is compiled, through `load_world(..., name=...)` ([model.md](model.md)); [api.md](api.md) passes `naoqi-viewer · <mode> · <url>`.
-- **Keys**: every letter and digit is already a MuJoCo viewer shortcut, and keys reach both MuJoCo and naoqi-viewer's `key_callback`, so naoqi-viewer only uses function keys MuJoCo leaves free (F8 and up): F9 for the status overlay, F10 for the camera pictures, F11 to mirror them.
+- **Keys**: every letter and digit is already a MuJoCo viewer shortcut, and keys reach both MuJoCo and naoqi-viewer's `key_callback`, so naoqi-viewer only uses function keys MuJoCo leaves free (F8 and up): F9 for the status overlay, F10 for the camera pictures, F11 to mirror them. The people markers have no key: the `people_display` flag alone turns them on ([people.md](people.md)).
 
 ### Loop
 
-`run(model, source, *, ghost=False, attribution=None, cameras=None, cameras_mirror=True, on_frame=None, stop=None)` runs until the window closes or `stop` (a `threading.Event`) is set:
+`run(model, source, *, ghost=False, attribution=None, cameras=None, cameras_mirror=True, people=None, on_frame=None, stop=None)` runs until the window closes or `stop` (a `threading.Event`) is set:
 
 1. `sample = source.latest()`; if its `seq` is new, `PoseWriter.apply` writes it into `data` (which runs `mj_kinematics` and `mj_camlight`).
-2. Update the ghost, the overlay and, with a `cameras` source, the camera pictures (below).
+2. Update the ghost, the overlay, with a `cameras` source the camera pictures and, with a `people` source, the people markers (below).
 3. Call `on_frame(model, data, sample)` if given, where `sample` is the sample the model is posed with (`None` before the first). The viewer process ([api.md](api.md)) uses this hook to serve camera renders between frames, on the thread that owns the window.
 4. `handle.sync()`, then sleep to the next 1/60 s tick (ticks on a fixed schedule, as in [source.md](source.md)).
 
-Steps 1 and 2 live in a `ViewerState` class (posing, overlay texts, ghost geoms, camera pictures, key handling) that works without a window: the fast tests drive it offscreen with a fake `PoseSource` and an `MjvScene`. `run` only wires it to `launch_passive`, and is tested in the live tier.
+Steps 1 and 2 live in a `ViewerState` class (posing, overlay texts, ghost geoms, camera pictures, people markers, key handling) that works without a window: the fast tests drive it offscreen with a fake `PoseSource` and an `MjvScene`. `run` only wires it to `launch_passive`, and is tested in the live tier.
 
 `mj_step` is never called: the pose comes only from the source.
 
@@ -45,7 +45,7 @@ Steps 1 and 2 live in a `ViewerState` class (posing, overlay texts, ghost geoms,
 
 ### Status overlay (top-left)
 
-- Lines: target and URL (`naoqi-sim tcp://127.0.0.1:9559`), NAOqi version, update rate (`source.rate()`, Hz), and data age in ms. Before the first connection (`source.info` is `None`) the first line reads `connecting tcp://…`. With the camera display on, two more lines, `top camera` and `bottom camera`, give each image's age (`NO IMAGE`, an age in ms, or `STALE`; [cameras.md](cameras.md)).
+- Lines: target and URL (`naoqi-sim tcp://127.0.0.1:9559`), NAOqi version, update rate (`source.rate()`, Hz), and data age in ms. Before the first connection (`source.info` is `None`) the first line reads `connecting tcp://…`. With the camera display on, two more lines, `top camera` and `bottom camera`, give each image's age (`NO IMAGE`, an age in ms, or `STALE`; [cameras.md](cameras.md)). With the people display on, one more, `people: 2 (1 visible)`, `people: none`, `NO DATA` or `STALE` ([people.md](people.md)).
 - When the data age passes 500 ms, or before the first sample, the data-age line reads `STALE` (or `NO DATA`). The robot stays in its last pose.
 - Shown with `handle.set_texts`, which takes plain text with no per-line color, so the `STALE` text is the stale marker. `F9` toggles the overlay.
 
@@ -68,6 +68,10 @@ It is off by default: it costs one more NAOqi call per poll, and when nothing is
 ### Camera pictures (top-right, `cameras` given)
 
 With `cameras_display: true` in the config, the viewer process hands `run` a `CameraSource` ([cameras.md](cameras.md)), and the window shows the two head cameras as NAOqi serves them: two 4:3 pictures stacked in the top-right corner, top camera above bottom camera, drawn with `handle.set_images` from the window loop's thread, outside `handle.lock()`. `ViewerState.pictures(viewport)` computes what to draw (the rectangles from `picture_rects`, the images resampled to them, a dark placeholder before a camera's first image) and reports whether anything changed since the last call, so the loop calls `set_images` only then. F10 hides and shows them (`clear_images` when hidden). They start mirrored left to right unless `cameras_mirror` is off, and F11 switches the mirroring, with `(mirrored)` on their status lines while it is on. The layout, the status lines, the staleness rule and the tests are [cameras.md](cameras.md)'s; this spec only places the step in the loop. The headless loop has no pictures, and the config refuses the combination.
+
+### People markers (`people` given)
+
+With `people_display: true` in the config, the viewer process hands `run` a `PeopleSource` ([people.md](people.md)), and each frame `ViewerState` adds one labelled sphere per person NAOqi lists to `handle.user_scn`, after the ghost's geoms, at the person's `PositionInWorldFrame`: yellow for a visible person, grey for one NAOqi tracks without seeing. `user_scn` is the window's alone, so the camera renders never contain a marker. A stale `People` draws nothing. The colours, sizes, staleness rule and tests are [people.md](people.md)'s; this spec only places the step in the loop. The headless loop has no markers, and the config refuses the combination.
 
 ### Attribution overlay (bottom-right)
 

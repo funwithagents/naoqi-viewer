@@ -11,6 +11,14 @@ import pytest
 from naoqi_viewer import NaoqiViewerConfig, client
 from naoqi_viewer.cameras import CameraImage
 from naoqi_viewer.model import NaoPose, load_world
+from naoqi_viewer.people import (
+    PEOPLE_STALE_AFTER,
+    PERSON_HIDDEN_RGBA,
+    PERSON_RADIUS,
+    PERSON_VISIBLE_RGBA,
+    People,
+    Person,
+)
 from naoqi_viewer.source import Sample, TargetInfo
 from naoqi_viewer.viewer import (
     ATTRIBUTION,
@@ -390,3 +398,61 @@ def test_a_headless_viewer_process_does_not_load_the_window_stack():
         check=True,
     )
     assert result.stdout.strip() == "[]"
+
+
+@dataclass
+class FakePeople:
+    people: People | None = None
+
+    def latest(self) -> People | None:
+        return self.people
+
+    def rate(self) -> float:
+        return 10.0
+
+    def close(self) -> None:
+        pass
+
+
+def test_people_markers_are_drawn_after_the_ghost_with_labels_and_colours(
+    world: mujoco.MjModel,
+):
+    people = FakePeople()
+    state = ViewerState(world, FakeSource(), people=people)
+    scene = mujoco.MjvScene(world, maxgeom=50)
+    state.draw_ghost(scene)
+    state.draw_people(scene, time.monotonic())
+    assert scene.ngeom == 0  # no answer yet
+    now = time.monotonic()
+    people.people = People(
+        (Person(7, (1.0, 0.5, 1.6), True), Person(8, (2.0, -1.0, 1.5), False)), 1, now
+    )
+    state.draw_people(scene, now)
+    assert scene.ngeom == 2
+    first, second = scene.geoms[0], scene.geoms[1]
+    assert first.type == mujoco.mjtGeom.mjGEOM_SPHERE
+    assert tuple(first.pos) == pytest.approx((1.0, 0.5, 1.6))
+    assert first.size[0] == pytest.approx(PERSON_RADIUS)
+    assert tuple(first.rgba) == pytest.approx(PERSON_VISIBLE_RGBA)
+    assert tuple(second.rgba) == pytest.approx(PERSON_HIDDEN_RGBA)
+    assert (first.label, second.label) == ("7", "8")
+    scene.ngeom = 0
+    state.draw_people(scene, now + PEOPLE_STALE_AFTER + 0.1)
+    assert scene.ngeom == 0  # stale
+
+
+def test_no_people_source_draws_nothing_and_adds_no_status_line(world: mujoco.MjModel):
+    state = ViewerState(world, FakeSource())
+    scene = mujoco.MjvScene(world, maxgeom=10)
+    state.draw_people(scene, time.monotonic())
+    assert scene.ngeom == 0
+    assert "people" not in status_lines(state)[0].splitlines()
+
+
+def test_the_people_status_line(world: mujoco.MjModel):
+    people = FakePeople()
+    state = ViewerState(world, FakeSource(), people=people)
+    left, right = status_lines(state)
+    assert (left.splitlines()[-1], right.splitlines()[-1]) == ("people", "NO DATA")
+    people.people = People((Person(1, (1, 0, 1.6), True),), 1, time.monotonic())
+    assert status_lines(state)[1].splitlines()[-1] == "1 (1 visible)"

@@ -25,6 +25,8 @@ from naoqi_viewer import protocol
 from naoqi_viewer.cameras import CameraSource
 from naoqi_viewer.config import ConfigError, NaoqiViewerConfig, is_scene_path
 from naoqi_viewer.model import load_world, resolve_variant
+from naoqi_viewer.people import PeopleSource
+from naoqi_viewer.props import POOL_NAMES, PropError, Props
 from naoqi_viewer.source import NaoqiSource, PoseSource, Sample
 from naoqi_viewer.viewer import ATTRIBUTION, run, run_headless
 
@@ -103,6 +105,7 @@ class RequestServer:
         variant: str,
         source: PoseSource,
         render: RenderFunction | None,
+        props: bool = False,
         accept_timeout: float,
         announce: Callable[[str], None] = lambda line: print(line, flush=True),
     ) -> None:
@@ -114,6 +117,8 @@ class RequestServer:
         self._variant = variant
         self._source = source
         self._render = render
+        self._props_enabled = props  # sim mode: the pool is in the model
+        self._props: Props | None = None  # built on the first frame, on the loop's data
         self._accept_timeout = accept_timeout
         self._announce = announce
         self._requests: queue.Queue[protocol.Header] = queue.Queue()
@@ -126,7 +131,12 @@ class RequestServer:
     def on_frame(
         self, model: mujoco.MjModel, data: mujoco.MjData, sample: Sample | None
     ) -> None:
-        """The viewer's on_frame hook: announce readiness once, then answer queued requests."""
+        """The viewer's on_frame hook: step the props, announce readiness once, then answer queued
+        requests."""
+        if self._props_enabled and self._props is None:
+            self._props = Props(model, data)
+        if self._props is not None:
+            self._props.step()
         if not self.ready:
             self.ready = True
             self._announce(protocol.ready_line(self.port))
@@ -197,7 +207,42 @@ class RequestServer:
         if op == "stop":
             self.stop.set()
             return ok(), b""
+        if op in _PROP_OPS:
+            if self._props is None:
+                return error("mode"), b""
+            try:
+                result = self._prop_op(op, request)
+            except PropError as exc:
+                return error(f"prop: {exc}"), b""
+            self._props.step()  # a frame asked for next shows it
+            return ok(**result), b""
         return error(f"unknown op {op!r}"), b""
+
+    def _prop_op(self, op: str, request: protocol.Header) -> dict[str, Any]:
+        props = self._props
+        assert props is not None
+        fields = {k: v for k, v in request.items() if k not in ("op", "id")}
+        allowed = _PROP_OPS[op]
+        unknown = set(fields) - allowed
+        if unknown:
+            raise PropError(f"unknown field(s) {', '.join(sorted(unknown))} for {op}")
+        if op == "props":
+            return {"props": [s.to_dict() for s in props.list().values()]}
+        if op == "props_clear":
+            return {"props": [s.to_dict() for s in props.clear().values()]}
+        if op == "prop_spawn":
+            if "kind" not in fields or "pos" not in fields:
+                raise PropError("prop_spawn needs kind and pos")
+            kind, pos = fields.pop("kind"), fields.pop("pos")
+            return {"prop": props.spawn(kind, pos, **fields).to_dict()}
+        if "name" not in fields:
+            raise PropError(f"{op} needs name")
+        name = fields.pop("name")
+        if not isinstance(name, str):
+            raise PropError(f"name must be a string, got {name!r}")
+        if op == "prop_place":
+            return {"prop": props.place(name, **fields).to_dict()}
+        return {"prop": props.despawn(name).to_dict()}
 
     def close(self) -> None:
         self.stop.set()
@@ -255,6 +300,15 @@ class RequestServer:
             self.stop.set()
 
 
+_PROP_OPS: dict[str, set[str]] = {
+    "props": set(),
+    "props_clear": set(),
+    "prop_spawn": {"kind", "pos", "name", "quat", "duration", "shape", "size", "color"},
+    "prop_place": {"name", "pos", "quat", "duration"},
+    "prop_despawn": {"name"},
+}
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run a viewer from its config (`NaoqiViewerConfig.to_dict()` as JSON, the one argument)."""
     args = sys.argv[1:] if argv is None else argv
@@ -277,9 +331,15 @@ def main(argv: list[str] | None = None) -> int:
         return fail(f"scene file not found: {scene}")
     try:
         variant = resolve_variant(config.world.variant)
-        model = load_world(scene, variant, name=f"naoqi-viewer · {mode} · {url}")
+        model = load_world(
+            scene, variant, name=f"naoqi-viewer · {mode} · {url}", props=mode == "sim"
+        )
     except (ValueError, FileNotFoundError) as exc:
-        return fail(str(exc))
+        message = str(exc)
+        clash = next((n for n in POOL_NAMES if f"'{n}'" in message), None)
+        if "repeated name" in message and clash is not None:
+            message = f"the scene uses {clash!r}, a name reserved for the props pool: {message}"
+        return fail(message)
 
     renderer = OffscreenRenderer() if mode == "sim" else None
     if config.headless:
@@ -300,6 +360,7 @@ def main(argv: list[str] | None = None) -> int:
     listener = socket.create_server(("127.0.0.1", 0))
     source = NaoqiSource(url, rate_hz=config.naoqi.rate_hz, commanded=config.ghost)
     cameras = CameraSource(url) if config.cameras_display else None
+    people = PeopleSource(url) if config.people_display else None
     server = RequestServer(
         listener,
         mode=mode,
@@ -307,6 +368,7 @@ def main(argv: list[str] | None = None) -> int:
         variant=variant,
         source=source,
         render=renderer,
+        props=mode == "sim",
         accept_timeout=config.launch_timeout_s,
     )
     try:
@@ -320,6 +382,7 @@ def main(argv: list[str] | None = None) -> int:
                 attribution=ATTRIBUTION if variant == "aldebaran" else None,
                 cameras=cameras,
                 cameras_mirror=config.cameras_mirror,
+                people=people,
                 on_frame=server.on_frame,
                 stop=server.stop,
             )
@@ -332,6 +395,8 @@ def main(argv: list[str] | None = None) -> int:
         source.close()
         if cameras is not None:
             cameras.close()
+        if people is not None:
+            people.close()
         if renderer is not None:
             renderer.close()
     return 0

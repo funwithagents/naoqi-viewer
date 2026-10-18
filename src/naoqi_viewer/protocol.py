@@ -9,7 +9,7 @@ import socket
 import struct
 from typing import Any
 
-PROTOCOL = 1
+PROTOCOL = 2
 READY_PREFIX = "NAOQI_VIEWER_READY"
 ERROR_PREFIX = "NAOQI_VIEWER_ERROR"
 
