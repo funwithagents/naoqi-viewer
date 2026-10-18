@@ -60,6 +60,7 @@ All settings for `view` come from one JSON file. Every key is optional, and miss
   "world": { "scene": "empty", "variant": "auto" },
   "ghost": false,
   "cameras_display": false,
+  "cameras_mirror": true,
   "launch_timeout_s": 30
 }
 ```
@@ -67,6 +68,7 @@ All settings for `view` come from one JSON file. Every key is optional, and miss
 - `world.scene` takes a bundled scene (`empty`, or `table`, which gives the cameras something to see) or a path to your own MJCF file ending in `.xml`. A relative path is resolved against the config file's directory.
 - `world.variant` can be `auto`, `placeholder` or `aldebaran`. `auto` uses Aldebaran's meshes when they are installed and the placeholder visuals otherwise.
 - `cameras_display: true` shows the two head cameras, read from NAOqi's `ALVideoDevice`, as pictures in the window's top-right corner (toggle them with `F10`). It works in both modes: on a real robot they are its cameras, on naoqi-sim the frames it injected. It costs NAOqi one camera subscription (QVGA at 10 fps), which the viewer removes when it closes.
+- `cameras_mirror` (`true` by default) draws those pictures mirrored left to right, like a car mirror, because the default view faces the robot: an object on the robot's left appears on your right in the view and in the picture. `false` draws them as NAOqi serves them, and `F11` switches between the two. The status lines say `(mirrored)` while it is on. Only the window's pictures are flipped; NAOqi and its clients get the images unchanged.
 - `headless: true` works only in `sim` mode, and cannot be combined with `ghost` or `cameras_display`.
 - An unknown key or a bad value fails at load time, and the error names the key, for example `naoqi.rate_hz must be a positive, finite number, got 0`.
 

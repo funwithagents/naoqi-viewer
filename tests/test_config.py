@@ -31,12 +31,14 @@ def test_defaults():
         config.world.variant,
         config.ghost,
         config.cameras_display,
+        config.cameras_mirror,
         config.launch_timeout_s,
     ) == (
         "empty",
         "auto",
         False,
         False,
+        True,
         30.0,
     )
 
@@ -57,6 +59,7 @@ def test_to_dict_round_trips_and_is_json():
         world=WorldSettings(scene="table", variant="placeholder"),
         ghost=True,
         cameras_display=True,
+        cameras_mirror=False,
         launch_timeout_s=12,
     )
     data = config.to_dict()
@@ -67,6 +70,7 @@ def test_to_dict_round_trips_and_is_json():
         "world": {"scene": "table", "variant": "placeholder"},
         "ghost": True,
         "cameras_display": True,
+        "cameras_mirror": False,
         "launch_timeout_s": 12,
     }
     assert NaoqiViewerConfig.from_json(json.dumps(data)) == config
@@ -93,6 +97,7 @@ def test_to_dict_round_trips_and_is_json():
         ({"mode": "mirror", "headless": True}, "headless", "requires mode 'sim'"),
         ({"mode": "sim", "headless": True, "ghost": True}, "ghost", "headless"),
         ({"cameras_display": 1}, "cameras_display", "must be a boolean"),
+        ({"cameras_mirror": "no"}, "cameras_mirror", "must be a boolean"),
         (
             {"mode": "sim", "headless": True, "cameras_display": True},
             "cameras_display",
@@ -112,6 +117,13 @@ def test_the_camera_display_is_valid_in_both_modes():
     for mode in ("mirror", "sim"):
         config = NaoqiViewerConfig.from_dict({"mode": mode, "cameras_display": True})
         assert config.cameras_display is True
+
+
+def test_the_mirror_setting_needs_no_display():
+    headless = NaoqiViewerConfig.from_dict(
+        {"mode": "sim", "headless": True, "cameras_mirror": False}
+    )
+    assert headless.cameras_mirror is False
 
 
 def test_non_finite_numbers_are_rejected():
