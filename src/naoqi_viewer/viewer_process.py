@@ -319,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
                 ghost=config.ghost,
                 attribution=ATTRIBUTION if variant == "aldebaran" else None,
                 cameras=cameras,
+                cameras_mirror=config.cameras_mirror,
                 on_frame=server.on_frame,
                 stop=server.stop,
             )

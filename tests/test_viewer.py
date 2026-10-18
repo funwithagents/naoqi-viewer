@@ -15,6 +15,7 @@ from naoqi_viewer.source import Sample, TargetInfo
 from naoqi_viewer.viewer import (
     ATTRIBUTION,
     KEY_TOGGLE_CAMERAS,
+    KEY_TOGGLE_MIRROR,
     KEY_TOGGLE_STATUS,
     ViewerState,
     run_headless,
@@ -225,13 +226,51 @@ def test_pictures_change_on_new_images_resizes_and_f10_only(world: mujoco.MjMode
     assert not plain.pictures_changed(VIEW)
 
 
+def test_pictures_are_mirrored_unless_turned_off_and_f11_switches(
+    world: mujoco.MjModel,
+):
+    cameras = FakeCameras()
+    image = cameras.push("top", 0)
+    image.image[:, :160] = (200, 0, 0)  # the left half red, as NAOqi serves it
+
+    def top_picture(state: ViewerState) -> np.ndarray:
+        pictures = state.pictures(VIEW)
+        assert pictures is not None
+        return pictures[0][1]
+
+    def labels(state: ViewerState) -> list[str]:
+        left, _ = status_lines(state)
+        return left.splitlines()[-2:]
+
+    red, black = [200, 0, 0], [0, 0, 0]
+    mirrored = ViewerState(world, FakeSource(), cameras=cameras)
+    picture = top_picture(mirrored)
+    assert (picture[150, 50].tolist(), picture[150, 350].tolist()) == (black, red)
+    assert labels(mirrored) == ["top camera (mirrored)", "bottom camera (mirrored)"]
+
+    plain = ViewerState(world, FakeSource(), cameras=cameras, cameras_mirror=False)
+    picture = top_picture(plain)
+    assert (picture[150, 50].tolist(), picture[150, 350].tolist()) == (red, black)
+    assert labels(plain) == ["top camera", "bottom camera"]
+
+    assert mirrored.pictures_changed(VIEW) and not mirrored.pictures_changed(VIEW)
+    mirrored.on_key(KEY_TOGGLE_MIRROR)
+    assert mirrored.pictures_changed(VIEW)  # F11 asks for a redraw
+    assert top_picture(mirrored)[150, 50].tolist() == red
+    assert labels(mirrored) == ["top camera", "bottom camera"]
+    assert image.image[0, 0].tolist() == red  # the source's image is never flipped
+
+
 def test_camera_status_lines(world: mujoco.MjModel):
     cameras = FakeCameras()
     source = FakeSource(info=TargetInfo("tcp://nao.local:9559", "real", "2.1.4.13"))
     state = ViewerState(world, source, cameras=cameras)
     source.push({})
     left, right = status_lines(state)
-    assert left.splitlines()[-2:] == ["top camera", "bottom camera"]
+    assert left.splitlines()[-2:] == [
+        "top camera (mirrored)",
+        "bottom camera (mirrored)",
+    ]
     assert right.splitlines()[-2:] == ["NO IMAGE", "NO IMAGE"]
 
     cameras.push("top", 1, age=0.08)
@@ -246,8 +285,8 @@ def test_camera_status_lines(world: mujoco.MjModel):
     assert left.splitlines() == [
         "connecting",
         "data age",
-        "top camera",
-        "bottom camera",
+        "top camera (mirrored)",
+        "bottom camera (mirrored)",
     ]
 
     state.on_key(KEY_TOGGLE_STATUS)

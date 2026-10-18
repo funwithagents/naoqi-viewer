@@ -30,6 +30,7 @@ It follows the configuration pattern of naoqi-bridge (`NaoqiBridgeConfig`): froz
   "world": { "scene": "table", "variant": "auto" },
   "ghost": false,
   "cameras_display": false,
+  "cameras_mirror": true,
   "launch_timeout_s": 30
 }
 ```
@@ -43,6 +44,7 @@ class NaoqiViewerConfig:
     world: WorldSettings = field(default_factory=WorldSettings)
     ghost: bool = False                          # draw the commanded pose (viewer.md, Ghost)
     cameras_display: bool = False                # show the head cameras from ALVideoDevice (cameras.md)
+    cameras_mirror: bool = True                  # draw those pictures mirrored, F11 to switch (cameras.md)
     launch_timeout_s: float = 30.0               # how long launch() waits for the window
 
 @dataclass(frozen=True)
@@ -66,8 +68,8 @@ class WorldSettings:
 - `to_dict()` returns the full config, every field included, as JSON-compatible data. `from_dict(config.to_dict()) == config`. It is how a `NaoqiViewer` hands its config to the viewer process ([api.md](api.md)).
 - Errors raise `ConfigError(ValueError)`, whose message names the offending key path (e.g. `naoqi.rate_hz must be a positive, finite number, got 0`). It carries `key` (the path, empty when the error isn't about one key) and `detail`.
 - **Unknown keys are errors**, so a typo fails when the config loads.
-- **Type and range checks:** `mode` ∈ `{"mirror", "sim"}`; `naoqi.url` a non-empty string; `naoqi.rate_hz` and `launch_timeout_s` positive, finite numbers; `world.scene` a non-empty string; `world.variant` ∈ `{"auto", "placeholder", "aldebaran"}`; `ghost`, `cameras_display` and `headless` booleans. Booleans are not accepted as numbers.
-- **Headless combinations:** `headless: true` requires `mode: "sim"`. A headless mirror would have nothing to show, since mirror mode serves no camera frames, so it is a `ConfigError` on `headless`. `headless: true` with `ghost: true` is a `ConfigError` on `ghost`, because the ghost is drawn only in the window, never in camera frames. `headless: true` with `cameras_display: true` is a `ConfigError` on `cameras_display` for the same reason: the pictures are drawn in the window ([cameras.md](cameras.md)). `cameras_display` is valid in both modes: the pictures come from NAOqi's `ALVideoDevice`, which a real robot and naoqi-sim both serve.
+- **Type and range checks:** `mode` ∈ `{"mirror", "sim"}`; `naoqi.url` a non-empty string; `naoqi.rate_hz` and `launch_timeout_s` positive, finite numbers; `world.scene` a non-empty string; `world.variant` ∈ `{"auto", "placeholder", "aldebaran"}`; `ghost`, `cameras_display`, `cameras_mirror` and `headless` booleans. Booleans are not accepted as numbers.
+- **Headless combinations:** `headless: true` requires `mode: "sim"`. A headless mirror would have nothing to show, since mirror mode serves no camera frames, so it is a `ConfigError` on `headless`. `headless: true` with `ghost: true` is a `ConfigError` on `ghost`, because the ghost is drawn only in the window, never in camera frames. `headless: true` with `cameras_display: true` is a `ConfigError` on `cameras_display` for the same reason: the pictures are drawn in the window ([cameras.md](cameras.md)). `cameras_display` is valid in both modes: the pictures come from NAOqi's `ALVideoDevice`, which a real robot and naoqi-sim both serve. `cameras_mirror` only matters with the display on, so it is accepted with `headless` and in both modes, and does nothing there.
 - Whether the machine can render offscreen (an OpenGL backend for headless mode) is checked when the viewer starts, not at load, like the meshes below.
 - **Scenes:** a `scene` ending in `.xml` is a path, anything else a bundled scene name (as `load_world` reads it, [model.md](model.md)). An unknown bundled name is a `ConfigError` when the config loads, listing the bundled scenes. A path is checked when the viewer starts, not at load (the file may be written later); a relative path read by `from_json_file` is resolved against the config file's directory, so a config and its scene can travel together.
 - Whether Aldebaran's meshes are installed (`variant: "aldebaran"`) is checked when the viewer starts, not at load: it's a property of the machine, not of the file.

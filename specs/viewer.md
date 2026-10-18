@@ -20,13 +20,13 @@ The window: it poses the model from a [pose source](source.md) and draws it, wit
 - The built-in passive viewer gives camera controls, rendering options, text overlays and `user_scn` (used for the ghost) for free.
 - On macOS, `launch_passive` must run under `mjpython`. [api.md](api.md) starts the viewer process with it, and `viewer.py` assumes it is already there.
 - Both side panels start hidden; the standard MuJoCo key toggles them.
-- The default camera tracks the `torso` body, so the robot stays in view when it walks. Double-click or the usual MuJoCo keys switch to a free camera.
+- The default camera tracks the `torso` body, so the robot stays in view when it walks. It looks at the robot from the front, slightly to its left (azimuth 150°, elevation −15°, 1.3 m), so the robot's left is on the watcher's right, which is why the camera pictures are mirrored by default ([cameras.md](cameras.md)). Double-click or the usual MuJoCo keys switch to a free camera.
 - **Window title**: the passive viewer has no title argument; it titles its window `MuJoCo : <model name>`. The title is therefore set when the world is compiled, through `load_world(..., name=...)` ([model.md](model.md)); [api.md](api.md) passes `naoqi-viewer · <mode> · <url>`.
-- **Keys**: every letter and digit is already a MuJoCo viewer shortcut, and keys reach both MuJoCo and naoqi-viewer's `key_callback`, so naoqi-viewer only uses function keys MuJoCo leaves free (F8 and up): F9 for the status overlay, F10 for the camera pictures.
+- **Keys**: every letter and digit is already a MuJoCo viewer shortcut, and keys reach both MuJoCo and naoqi-viewer's `key_callback`, so naoqi-viewer only uses function keys MuJoCo leaves free (F8 and up): F9 for the status overlay, F10 for the camera pictures, F11 to mirror them.
 
 ### Loop
 
-`run(model, source, *, ghost=False, attribution=None, cameras=None, on_frame=None, stop=None)` runs until the window closes or `stop` (a `threading.Event`) is set:
+`run(model, source, *, ghost=False, attribution=None, cameras=None, cameras_mirror=True, on_frame=None, stop=None)` runs until the window closes or `stop` (a `threading.Event`) is set:
 
 1. `sample = source.latest()`; if its `seq` is new, `PoseWriter.apply` writes it into `data` (which runs `mj_kinematics` and `mj_camlight`).
 2. Update the ghost, the overlay and, with a `cameras` source, the camera pictures (below).
@@ -67,7 +67,7 @@ It is off by default: it costs one more NAOqi call per poll, and when nothing is
 
 ### Camera pictures (top-right, `cameras` given)
 
-With `cameras_display: true` in the config, the viewer process hands `run` a `CameraSource` ([cameras.md](cameras.md)), and the window shows the two head cameras as NAOqi serves them: two 4:3 pictures stacked in the top-right corner, top camera above bottom camera, drawn with `handle.set_images` from the window loop's thread, outside `handle.lock()`. `ViewerState.pictures(viewport)` computes what to draw (the rectangles from `picture_rects`, the images resampled to them, a dark placeholder before a camera's first image) and reports whether anything changed since the last call, so the loop calls `set_images` only then. F10 hides and shows them (`clear_images` when hidden). The layout, the status lines, the staleness rule and the tests are [cameras.md](cameras.md)'s; this spec only places the step in the loop. The headless loop has no pictures, and the config refuses the combination.
+With `cameras_display: true` in the config, the viewer process hands `run` a `CameraSource` ([cameras.md](cameras.md)), and the window shows the two head cameras as NAOqi serves them: two 4:3 pictures stacked in the top-right corner, top camera above bottom camera, drawn with `handle.set_images` from the window loop's thread, outside `handle.lock()`. `ViewerState.pictures(viewport)` computes what to draw (the rectangles from `picture_rects`, the images resampled to them, a dark placeholder before a camera's first image) and reports whether anything changed since the last call, so the loop calls `set_images` only then. F10 hides and shows them (`clear_images` when hidden). They start mirrored left to right unless `cameras_mirror` is off, and F11 switches the mirroring, with `(mirrored)` on their status lines while it is on. The layout, the status lines, the staleness rule and the tests are [cameras.md](cameras.md)'s; this spec only places the step in the loop. The headless loop has no pictures, and the config refuses the combination.
 
 ### Attribution overlay (bottom-right)
 

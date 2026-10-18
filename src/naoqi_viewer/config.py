@@ -228,6 +228,9 @@ class NaoqiViewerConfig(JsonConfig):
     world: WorldSettings = field(default_factory=WorldSettings)
     ghost: bool = False
     cameras_display: bool = False  # the head cameras from ALVideoDevice, in the window
+    cameras_mirror: bool = (
+        True  # those pictures mirrored, to match the view facing the robot
+    )
     launch_timeout_s: float = 30.0
 
     def __post_init__(self) -> None:
@@ -265,6 +268,7 @@ class NaoqiViewerConfig(JsonConfig):
             world=WorldSettings.parse,
             ghost=_as_bool,
             cameras_display=_as_bool,
+            cameras_mirror=_as_bool,
             launch_timeout_s=_as_number,
         )
 

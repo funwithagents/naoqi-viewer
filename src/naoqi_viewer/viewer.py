@@ -28,9 +28,10 @@ ATTRIBUTION = "NAO meshes © Aldebaran, CC BY-NC-ND 4.0"
 GHOST_RGBA = (0.35, 0.65, 1.0, 0.3)
 GHOST_MIN_OFFSET = 0.001  # m: closer bodies get no ghost
 GHOST_MIN_TURN = 0.025  # Frobenius distance between rotations, about 0.5°
-# GLFW_KEY_F9 and F10: letters and digits are all MuJoCo shortcuts already.
+# GLFW_KEY_F9 to F11: letters and digits are all MuJoCo shortcuts already.
 KEY_TOGGLE_STATUS = 298
 KEY_TOGGLE_CAMERAS = 299
+KEY_TOGGLE_MIRROR = 300
 
 _VISUAL_GROUP = 1
 
@@ -60,13 +61,17 @@ class ViewerState:
         ghost: bool = False,
         attribution: str | None = None,
         cameras: ImageSource | None = None,
+        cameras_mirror: bool = True,
     ) -> None:
         self.model = model
         self.data = mujoco.MjData(model)
         self.show_status = True
         self.show_cameras = True
+        self.mirror_cameras = (
+            cameras_mirror  # left to right, as the view faces the robot
+        )
         self._cameras = cameras
-        self._drawn: tuple[Rect, tuple[int, ...], bool] | None = (
+        self._drawn: tuple[Rect, tuple[int, ...], bool, bool] | None = (
             None  # last pictures_changed key
         )
         self.sample: Sample | None = None  # the sample the model is posed with
@@ -154,8 +159,8 @@ class ViewerState:
 
     def pictures(self, viewport: Rect) -> list[Picture] | None:
         """The camera pictures to draw in `viewport` (left, bottom, width, height): the top
-        camera's and the bottom camera's, each resampled to its rectangle and framed, a dark
-        placeholder before a camera's first image. None when there are no cameras, they are
+        camera's and the bottom camera's, each flipped left to right when mirrored, resampled to its
+        rectangle and framed, a dark placeholder before a camera's first image. None when there are no cameras, they are
         hidden (F10), or the view is too small for them."""
         if self._cameras is None or not self.show_cameras:
             return None
@@ -166,17 +171,17 @@ class ViewerState:
         for camera, rect in zip(CAMERA_NAMES, rects, strict=True):
             size = (rect[2], rect[3])
             image = self._cameras.latest(camera)
-            picture = (
-                placeholder(size)
-                if image is None
-                else framed(resample_nearest(image.image, size))
-            )
+            if image is None:
+                picture = placeholder(size)
+            else:
+                pixels = image.image[:, ::-1] if self.mirror_cameras else image.image
+                picture = framed(resample_nearest(pixels, size))
             pictures.append((rect, picture))
         return pictures
 
     def pictures_changed(self, viewport: Rect) -> bool:
         """Whether `pictures(viewport)` differs from what was drawn when this last returned True:
-        a new image for either camera, a resized view, or the F10 toggle. Always False without
+        a new image for either camera, a resized view, or the F10 or F11 toggle. Always False without
         cameras."""
         if self._cameras is None:
             return False
@@ -184,7 +189,7 @@ class ViewerState:
             image.seq if (image := self._cameras.latest(camera)) is not None else 0
             for camera in CAMERA_NAMES
         )
-        key = (viewport, seqs, self.show_cameras)
+        key = (viewport, seqs, self.show_cameras, self.mirror_cameras)
         if key == self._drawn:
             return False
         self._drawn = key
@@ -195,6 +200,8 @@ class ViewerState:
             self.show_status = not self.show_status
         elif key == KEY_TOGGLE_CAMERAS:
             self.show_cameras = not self.show_cameras
+        elif key == KEY_TOGGLE_MIRROR:
+            self.mirror_cameras = not self.mirror_cameras
 
     def _status(self, now: float) -> tuple[list[str], list[str]]:
         info = self._source.info
@@ -215,7 +222,11 @@ class ViewerState:
         if self._cameras is not None:
             for camera in CAMERA_NAMES:
                 image = self._cameras.latest(camera)
-                labels.append(f"{camera} camera")
+                labels.append(
+                    f"{camera} camera (mirrored)"
+                    if self.mirror_cameras
+                    else f"{camera} camera"
+                )
                 values.append(
                     _age_text(
                         None if image is None else image.received_at,
@@ -244,6 +255,7 @@ def run(
     ghost: bool = False,
     attribution: str | None = None,
     cameras: ImageSource | None = None,
+    cameras_mirror: bool = True,
     on_frame: FrameHook | None = None,
     stop: threading.Event | None = None,
 ) -> None:
@@ -251,13 +263,18 @@ def run(
 
     `on_frame(model, data, sample)` runs between frames, on this thread, with the sample the model
     is posed with. With `cameras`, the head cameras' pictures are drawn in the view's top-right
-    corner.
+    corner, mirrored left to right with `cameras_mirror` (F11 switches it).
     """
     import mujoco.viewer  # the window stack (GLFW), which a headless viewer never loads
 
     stop = stop or threading.Event()
     state = ViewerState(
-        model, source, ghost=ghost, attribution=attribution, cameras=cameras
+        model,
+        source,
+        ghost=ghost,
+        attribution=attribution,
+        cameras=cameras,
+        cameras_mirror=cameras_mirror,
     )
     with mujoco.viewer.launch_passive(
         model,
