@@ -24,6 +24,7 @@ from naoqi_viewer.config import NaoqiViewerConfig
 from naoqi_viewer.props import (
     DEFAULT_OBJECT_COLOR,
     DEFAULT_OBJECT_SIZE,
+    Frame,
     Kind,
     PropError,
     PropState,
@@ -89,7 +90,9 @@ def _floats(value: Any) -> Any:
 
 class PropsClient:
     """The props of a sim-mode viewer (props.md): each call is one request, serialized with the
-    viewer's other calls. Positions are in the scene's world frame."""
+    viewer's other calls. Positions are given in the scene's frame (`frame="world"`, NAOqi's
+    FRAME_WORLD) or the robot's (`frame="robot"`, FRAME_ROBOT at the robot's pose when the call
+    is answered); the states returned are always in the scene's frame."""
 
     def __init__(self, viewer: "NaoqiViewer") -> None:
         self._viewer = viewer
@@ -105,6 +108,7 @@ class PropsClient:
         *,
         name: str | None = None,
         quat: Any = None,
+        frame: Frame = "world",
         duration: float = 0.0,
         shape: Shape = "sphere",
         size: Any = DEFAULT_OBJECT_SIZE,
@@ -113,6 +117,7 @@ class PropsClient:
         fields: dict[str, Any] = {
             "kind": kind,
             "pos": _floats(pos),
+            "frame": frame,
             "duration": duration,
         }
         if name is not None:
@@ -125,9 +130,15 @@ class PropsClient:
         return PropState.from_dict(header["prop"])
 
     def place(
-        self, name: str, pos: Any = None, quat: Any = None, *, duration: float = 0.0
+        self,
+        name: str,
+        pos: Any = None,
+        quat: Any = None,
+        *,
+        frame: Frame = "world",
+        duration: float = 0.0,
     ) -> PropState:
-        fields: dict[str, Any] = {"name": name, "duration": duration}
+        fields: dict[str, Any] = {"name": name, "frame": frame, "duration": duration}
         if pos is not None:
             fields["pos"] = _floats(pos)
         if quat is not None:

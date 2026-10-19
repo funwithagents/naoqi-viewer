@@ -18,11 +18,14 @@ if TYPE_CHECKING:
     import mujoco
 
 type Kind = Literal["face", "object"]
+type Frame = Literal["world", "robot"]
 type Shape = Literal["sphere", "box", "cylinder"]
 type Vec3 = tuple[float, float, float]
 type Quat = tuple[float, float, float, float]
 
 KINDS: tuple[Kind, ...] = ("face", "object")
+FRAMES: tuple[Frame, ...] = ("world", "robot")
+FEET = ("LLeg", "RLeg")  # the soles' sites, NAOqi's leg effectors
 SHAPES: tuple[Shape, ...] = ("sphere", "box", "cylinder")
 PORTRAITS_DIR = Path(__file__).parent / "portraits"
 FACE_IMAGES: tuple[str, ...] = ("armstrong", "chawla", "schmid", "malenchenko")
@@ -140,6 +143,13 @@ def check_color(color: Any) -> Vec3:
     return cast(Vec3, values)
 
 
+def check_frame(frame: Any) -> Frame:
+    for f in FRAMES:
+        if frame == f:
+            return f
+    raise PropError(f"frame must be 'world' or 'robot', got {frame!r}")
+
+
 def check_kind(kind: Any) -> Kind:
     for k in KINDS:
         if kind == k:
@@ -215,6 +225,32 @@ def facing(pos: Vec3, target: Sequence[float]) -> Quat:
     return _quat_mul(_yaw(heading), FACE_QUAT)
 
 
+def robot_frame(feet: Sequence[Any]) -> tuple[float, float, float]:
+    """NAOqi's FRAME_ROBOT in the world as `(x, y, theta)`, from the two soles' world poses
+    (`(position, 3x3 rotation)` each): the middle of the feet on the floor, heading along their
+    mean yaw. What `ALMotion.getRobotPosition` answers, for the pose the viewer draws."""
+    (left_pos, left_rot), (right_pos, right_rot) = feet
+    # Average the feet's forward directions, as unit vectors: robust across +-pi.
+    forward_x = left_rot[0][0] + right_rot[0][0]
+    forward_y = left_rot[1][0] + right_rot[1][0]
+    return (
+        (float(left_pos[0]) + float(right_pos[0])) / 2,
+        (float(left_pos[1]) + float(right_pos[1])) / 2,
+        math.atan2(forward_y, forward_x),
+    )
+
+
+def robot_to_world(
+    robot: tuple[float, float, float], pos: Vec3, quat: Quat | None
+) -> tuple[Vec3, Quat | None]:
+    """A position and orientation given in FRAME_ROBOT, in the world frame, for the robot at
+    `robot` (x, y, theta). Heights are the same in both: both frames sit on the floor."""
+    x, y, theta = robot
+    c, s = math.cos(theta), math.sin(theta)
+    world = (x + c * pos[0] - s * pos[1], y + s * pos[0] + c * pos[1], pos[2])
+    return world, None if quat is None else _quat_mul(_yaw(theta), quat)
+
+
 def _lerp(a: Sequence[float], b: Sequence[float], t: float) -> tuple[float, ...]:
     return tuple(x + (y - x) * t for x, y in zip(a, b, strict=True))
 
@@ -287,6 +323,9 @@ class Props:
         self._model, self._data, self._clock = model, data, clock
         self._lock = threading.Lock()
         self._torso = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "torso")
+        self._feet = [
+            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, f) for f in FEET
+        ]
         self._props: dict[str, _Prop] = {}
         for index, name in enumerate(POOL_NAMES):
             body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
@@ -324,6 +363,7 @@ class Props:
         *,
         name: str | None = None,
         quat: Any = None,
+        frame: Frame = "world",
         duration: float = 0.0,
         shape: Shape = "sphere",
         size: Any = DEFAULT_OBJECT_SIZE,
@@ -332,6 +372,7 @@ class Props:
         kind = check_kind(kind)
         target = check_pos(pos)
         orientation = None if quat is None else check_quat(quat)
+        frame = check_frame(frame)
         duration = check_duration(duration)
         dims: tuple[float, ...] = (DEFAULT_OBJECT_SIZE,)
         rgb: Vec3 = DEFAULT_OBJECT_COLOR
@@ -356,18 +397,33 @@ class Props:
                 prop = free[0]
             if kind == "object":
                 prop.shape, prop.size, prop.color = shape, dims, rgb
+            if frame == "robot":
+                target, orientation = robot_to_world(self.robot(), target, orientation)
             prop.visible = True
             self._move(prop, target, orientation, duration)
             return self._state(prop, self._clock())
 
     def place(
-        self, name: str, pos: Any = None, quat: Any = None, *, duration: float = 0.0
+        self,
+        name: str,
+        pos: Any = None,
+        quat: Any = None,
+        *,
+        frame: Frame = "world",
+        duration: float = 0.0,
     ) -> PropState:
         target = None if pos is None else check_pos(pos)
         orientation = None if quat is None else check_quat(quat)
+        frame = check_frame(frame)
         duration = check_duration(duration)
         with self._lock:
             prop = self._get(name)
+            if frame == "robot":
+                robot = self.robot()
+                if target is not None:
+                    target, orientation = robot_to_world(robot, target, orientation)
+                elif orientation is not None:
+                    orientation = robot_to_world(robot, (0, 0, 0), orientation)[1]
             if target is None:
                 target = prop.target_pos
             if orientation is None and prop.kind == "object":
@@ -423,6 +479,17 @@ class Props:
             mujoco.mj_kinematics(self._model, self._data)
             mujoco.mj_camlight(self._model, self._data)
         return moved
+
+    def robot(self) -> tuple[float, float, float]:
+        """NAOqi's FRAME_ROBOT in the world, `(x, y, theta)`, at the pose the model is drawn in."""
+        if min(self._feet) < 0:
+            raise PropError("the model has no feet sites: no robot frame")
+        return robot_frame(
+            [
+                (self._data.site_xpos[i], self._data.site_xmat[i].reshape(3, 3))
+                for i in self._feet
+            ]
+        )
 
     def _get(self, name: str) -> _Prop:
         prop = self._props.get(name)

@@ -303,8 +303,18 @@ class RequestServer:
 _PROP_OPS: dict[str, set[str]] = {
     "props": set(),
     "props_clear": set(),
-    "prop_spawn": {"kind", "pos", "name", "quat", "duration", "shape", "size", "color"},
-    "prop_place": {"name", "pos", "quat", "duration"},
+    "prop_spawn": {
+        "kind",
+        "pos",
+        "name",
+        "quat",
+        "frame",
+        "duration",
+        "shape",
+        "size",
+        "color",
+    },
+    "prop_place": {"name", "pos", "quat", "frame", "duration"},
     "prop_despawn": {"name"},
 }
 

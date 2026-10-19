@@ -7,7 +7,7 @@ import mujoco
 import numpy as np
 import pytest
 
-from naoqi_viewer.model import load_world
+from naoqi_viewer.model import NaoPose, PoseWriter, load_world
 from naoqi_viewer.props import (
     FACE_IMAGES,
     OBJECT_POOL_SIZE,
@@ -16,6 +16,8 @@ from naoqi_viewer.props import (
     PropError,
     Props,
     PropState,
+    robot_frame,
+    robot_to_world,
 )
 
 
@@ -253,3 +255,112 @@ def test_an_object_stands_upright_whatever_its_place(scene):
     geom = model.geom(pillar.name).id
     assert tuple(model.geom_aabb[geom][3:]) == pytest.approx((0.1, 0.1, 0.5))
     assert model.geom_rbound[geom] == pytest.approx(math.sqrt(0.01 + 0.01 + 0.25))
+
+
+def _yaw_quat(theta: float) -> tuple[float, float, float, float]:
+    return (math.cos(theta / 2), 0.0, 0.0, math.sin(theta / 2))
+
+
+@pytest.mark.parametrize("theta", [0.0, -0.133, 2.0, math.pi - 0.01, -math.pi + 0.01])
+def test_the_robot_frame_is_the_middle_of_the_feet_along_their_heading(
+    world, theta: float
+):
+    model = world.__copy__()
+    data = mujoco.MjData(model)
+    PoseWriter(model).apply(data, NaoPose({}, (0.3, -0.2, 0.3332), _yaw_quat(theta)))
+    props = Props(model, data)
+    x, y, heading = props.robot()
+    # Straight legs: the soles are right under the hips, on either side of the torso's axis.
+    assert (x, y) == pytest.approx((0.3, -0.2), abs=0.02)
+    assert math.remainder(heading - theta, 2 * math.pi) == pytest.approx(0, abs=1e-6)
+
+
+def test_robot_to_world_turns_and_moves_by_the_robots_pose():
+    pos, quat = robot_to_world((1.0, 2.0, math.pi / 2), (1.5, 0.0, 0.1), None)
+    assert pos == pytest.approx((1.0, 3.5, 0.1))  # 1.5 m ahead of a robot facing +y
+    assert quat is None
+    _, quat = robot_to_world((0.0, 0.0, 0.5), (0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0))
+    assert quat == pytest.approx(_yaw_quat(0.5))
+
+
+def test_robot_frame_handles_feet_pointing_either_side_of_pi():
+    def foot(yaw: float) -> tuple[list[float], list[list[float]]]:
+        c, s = math.cos(yaw), math.sin(yaw)
+        return [0.0, 0.0, 0.0], [[c, -s, 0], [s, c, 0], [0, 0, 1]]
+
+    heading = robot_frame([foot(math.pi - 0.1), foot(-math.pi + 0.1)])[2]
+    assert math.remainder(heading - math.pi, 2 * math.pi) == pytest.approx(0, abs=1e-9)
+
+
+def test_spawn_and_place_in_the_robot_frame_land_ahead_of_the_drawn_robot(world):
+    model = world.__copy__()
+    data = mujoco.MjData(model)
+    theta = -0.133  # NAOqi's odometry right after boot
+    PoseWriter(model).apply(data, NaoPose({}, (0.0, 0.0, 0.3332), _yaw_quat(theta)))
+    props = Props(model, data)
+    robot = props.robot()
+    ball = props.spawn("object", (1.5, 0.0, 0.1), frame="robot", size=0.1)
+    assert ball.pos == pytest.approx(robot_to_world(robot, (1.5, 0.0, 0.1), None)[0])
+    assert ball.pos == pytest.approx(
+        (1.5 * math.cos(theta), 1.5 * math.sin(theta), 0.1), abs=0.02
+    )
+    assert ball.quat == pytest.approx(
+        (1, 0, 0, 0)
+    )  # upright in the world, frame or not
+    moved = props.place(ball.name, (1.0, 0.5, 0.1), frame="robot")
+    assert moved.pos == pytest.approx(robot_to_world(robot, (1.0, 0.5, 0.1), None)[0])
+    with pytest.raises(PropError, match="frame"):
+        props.spawn("object", (1, 0, 0), frame="head")  # type: ignore[arg-type]
+
+
+def _texture(model: mujoco.MjModel, name: str) -> np.ndarray:
+    texture = model.texture(f"prop_{name}")
+    size = texture.width[0] * texture.height[0] * texture.nchannel[0]
+    pixels = model.tex_data[texture.adr[0] : texture.adr[0] + size]
+    return pixels.reshape(texture.height[0], texture.width[0], texture.nchannel[0])[
+        ..., :3
+    ]
+
+
+def _halves(image: np.ndarray) -> tuple[float, float]:
+    """Mean brightness of the left half minus the right, and of the top half minus the
+    bottom: their signs flip when a picture is mirrored or upside down."""
+    grey = image.astype(float).mean(axis=2)
+    height, width = grey.shape
+    return (
+        grey[:, : width // 2].mean() - grey[:, width // 2 :].mean(),
+        grey[: height // 2].mean() - grey[height // 2 :].mean(),
+    )
+
+
+def test_each_portrait_is_rendered_upright_and_unmirrored(scene):
+    """Seen by the robot's camera, each face plane shows its portrait as the picture is:
+    the render's brightness halves match the texture's, which a mirrored or upside-down
+    picture would not (every bundled portrait is lopsided enough to tell)."""
+    model, data, props = scene
+    try:
+        renderer = mujoco.Renderer(model, height=480, width=640)
+    except Exception as exc:  # noqa: BLE001  # no offscreen GL on this machine
+        pytest.skip(f"no offscreen OpenGL: {exc}")
+    with renderer:
+
+        def shot() -> np.ndarray:
+            renderer.update_scene(data, camera="CameraTop")
+            return renderer.render().astype(int)
+
+        background = shot()
+        for index, image in enumerate(FACE_IMAGES):
+            name = f"face_{index + 1}"
+            state = props.spawn("face", (0.8, 0.0, 0.45), name=name)
+            props.step()
+            frame = shot()
+            props.despawn(name)
+            props.step()
+            assert state.image == image
+            rows, columns = np.nonzero(np.abs(frame - background).sum(axis=2) > 30)
+            assert rows.size > 10_000, f"{name} is not in view"
+            crop = frame[rows.min() : rows.max() + 1, columns.min() : columns.max() + 1]
+            expected = _halves(_texture(model, name))
+            assert min(map(abs, expected)) > 5  # lopsided enough to tell a flip
+            assert _halves(crop) == pytest.approx(expected, abs=3), name
+        assert np.array_equal(shot(), background)  # all gone
