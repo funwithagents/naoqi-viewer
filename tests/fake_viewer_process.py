@@ -55,6 +55,25 @@ log("WARNING naoqi_viewer.viewer: a warning from the viewer process")
 log("[I] 1791534114.3 qimessaging.session: a native log line")
 connection, _ = listener.accept()
 
+PARKED = [0.0, 0.0, -1.0]
+
+
+def prop_state(name: str, visible: bool, pos: list[float]) -> dict[str, object]:
+    face = name.startswith("face")
+    return {
+        "name": name,
+        "kind": "face" if face else "object",
+        "visible": visible,
+        "pos": pos,
+        "quat": [1.0, 0.0, 0.0, 0.0],
+        "moving": False,
+        "image": "armstrong" if face else None,
+        "shape": None if face else "sphere",
+        "size": None if face else [0.05],
+        "color": None if face else [1.0, 0.0, 0.0],
+    }
+
+
 answered = 0
 try:
     while True:
@@ -99,8 +118,37 @@ try:
                 pose_age=0.02,
             )
             payload = image.tobytes()
-        elif op == "camera_frame":
+        elif op == "camera_frame" or (
+            str(op).startswith("prop") and config["mode"] != "sim"
+        ):
             reply = {"id": request.get("id"), "ok": False, "error": "mode"}
+        elif op in ("props", "props_clear"):
+            reply["props"] = [
+                prop_state(n, False, PARKED) for n in ("face_1", "object_1")
+            ]
+        elif op in ("prop_spawn", "prop_place", "prop_despawn"):
+            # The fields received are echoed in the state, so a test reads what went on the wire.
+            name = request.get("name") or (
+                "face_1" if request.get("kind") == "face" else "object_1"
+            )
+            if name == "nope":
+                reply = {
+                    "id": request.get("id"),
+                    "ok": False,
+                    "error": "prop: no prop 'nope'",
+                }
+            else:
+                state = prop_state(
+                    name, op != "prop_despawn", request.get("pos", PARKED)
+                )
+                if request.get("kind") == "object":
+                    size = request["size"]
+                    state.update(
+                        shape=request["shape"],
+                        size=[size] if isinstance(size, int | float) else size,
+                        color=request["color"],
+                    )
+                reply["prop"] = state
         elif op == "stop":
             protocol.write_message(connection, reply)
             break

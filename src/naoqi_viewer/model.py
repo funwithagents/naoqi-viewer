@@ -10,6 +10,7 @@ import mujoco
 import numpy as np
 
 from naoqi_viewer import meshes
+from naoqi_viewer import props as _props
 
 _log = logging.getLogger(__name__)
 
@@ -63,11 +64,17 @@ def _scene_path(scene: str | Path | None) -> Path:
 
 
 def load_world(
-    scene: str | Path | None = None, variant: Variant = "auto", name: str | None = None
+    scene: str | Path | None = None,
+    variant: Variant = "auto",
+    name: str | None = None,
+    *,
+    props: bool = False,
 ) -> mujoco.MjModel:
     """Compile a scene (bundled name or MJCF path, default "empty") with the NAO attached to it.
 
     `name` becomes the compiled model's name, which MuJoCo's viewer shows as its window title.
+    `props` appends the props pool (sim mode, props.md): hidden faces and objects a caller shows
+    and moves at runtime.
     """
     resolved = resolve_variant(variant)
     world = mujoco.MjSpec.from_file(str(_scene_path(scene)))
@@ -80,6 +87,8 @@ def load_world(
         meshes.apply_visuals(robot, directory)
     # An empty prefix keeps the robot's names (joints, cameras, sites) as in nao.xml.
     world.worldbody.add_frame().attach_body(robot.body("torso"), "", "")
+    if props:
+        _props.add_pool(world)
     return world.compile()
 
 

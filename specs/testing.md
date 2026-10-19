@@ -87,7 +87,7 @@ A live test needs a NAOqi to talk to, and it must **skip, never fail**, when non
 
 ## Live tier: headless or windowed
 
-One run opens its viewers one way, chosen by an environment variable, as reachy-mini-bridge's live tier does:
+One run opens its viewers one way, chosen by an environment variable:
 
 | Run | Command | Viewers |
 |---|---|---|

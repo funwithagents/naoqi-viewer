@@ -5,6 +5,7 @@ from naoqi_viewer.client import (
     LaunchError,
     ModeError,
     NaoqiViewer,
+    PropsClient,
     ViewerClosed,
     ViewerStatus,
 )
@@ -14,6 +15,7 @@ from naoqi_viewer.config import (
     NaoqiViewerConfig,
     WorldSettings,
 )
+from naoqi_viewer.props import PropError, PropState
 
 __all__ = [
     "CameraFrame",
@@ -23,6 +25,9 @@ __all__ = [
     "NaoqiSettings",
     "NaoqiViewer",
     "NaoqiViewerConfig",
+    "PropError",
+    "PropState",
+    "PropsClient",
     "ViewerClosed",
     "ViewerStatus",
     "WorldSettings",

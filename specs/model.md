@@ -68,7 +68,7 @@ Kinematics, joints, sensors, cameras and collision geoms are therefore identical
 
 ### Scenes
 
-The model holds the robot only. A scene is an MJCF file with the world around it (floor, lights, objects). `load_world(scene, variant)` attaches the robot into the scene with `MjSpec.attach`, so any scene works with either variant. Scenes ship in `src/naoqi_viewer/scenes/`. `empty.xml` (checker floor, one light) is the default; the other bundled scenes are listed in [api.md](api.md). `load_world` takes a bundled scene name or a path to a user file.
+The model holds the robot only. A scene is an MJCF file with the world around it (floor, lights, objects). `load_world(scene, variant)` attaches the robot into the scene with `MjSpec.attach`, so any scene works with either variant. Scenes ship in `src/naoqi_viewer/scenes/`. `empty.xml` (checker floor, one light) is the default; the other bundled scenes are listed in [api.md](api.md). `load_world` takes a bundled scene name or a path to a user file. With `props=True` (sim mode) it also appends the props pool to the scene's spec before compiling, hidden mocap bodies a caller shows and moves at runtime ([props.md](props.md)); mirror mode passes `False` and gets the scene as written.
 
 ### Runtime API (`model.py`)
 
@@ -77,7 +77,7 @@ JOINT_NAMES: tuple[str, ...]                        # the 26 names above, NAOqi 
 Variant = Literal["auto", "placeholder", "aldebaran"]
 
 def resolve_variant(variant: Variant = "auto") -> Literal["placeholder", "aldebaran"]
-def load_world(scene: str | Path | None = None, variant: Variant = "auto", name: str | None = None) -> mujoco.MjModel
+def load_world(scene: str | Path | None = None, variant: Variant = "auto", name: str | None = None, *, props: bool = False) -> mujoco.MjModel
 
 @dataclass(frozen=True)
 class NaoPose:

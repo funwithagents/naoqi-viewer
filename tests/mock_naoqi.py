@@ -83,6 +83,12 @@ class _Memory:
     def insertData(self, key: str, value: Any) -> None:
         self._mock._call("ALMemory", "insertData", key, value)
 
+    def getListData(self, keys: list[str]) -> list[Any]:
+        return self._mock._call("ALMemory", "getListData", keys)
+
+    def removeData(self, key: str) -> None:
+        self._mock._call("ALMemory", "removeData", key)
+
 
 class _VideoDevice:
     """ALVideoDevice as naoqi-viewer's camera display uses it (specs/cameras.md): named
@@ -266,7 +272,11 @@ class MockNaoqi:
     def _call(self, service: str, method: str, *args: Any) -> Any:
         with self._lock:
             self.calls.append((service, method, args))
-            if service in ("ALMotion", "ALVideoDevice") and self._failure is not None:
+            if (
+                service in ("ALMotion", "ALVideoDevice", "ALMemory")
+                and method != "getData"
+                and self._failure is not None
+            ):
                 raise RuntimeError(self._failure)
             return getattr(self, f"_{method}")(*args)
 
@@ -327,6 +337,13 @@ class MockNaoqi:
 
     def _insertData(self, key: str, value: Any) -> None:
         self._memory[key] = value
+
+    def _getListData(self, keys: list[str]) -> list[Any]:
+        # NAOqi answers a missing key with None in its slot, not an error.
+        return [self._memory.get(key) for key in keys]
+
+    def _removeData(self, key: str) -> None:
+        self._memory.pop(key, None)
 
     def _subscribeCameras(
         self, name: str, indexes: Any, resolutions: Any, colorspaces: Any, fps: int

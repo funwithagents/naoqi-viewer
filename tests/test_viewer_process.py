@@ -5,7 +5,8 @@ import subprocess
 import sys
 import time
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import NoReturn
 
 import mujoco
@@ -70,7 +71,11 @@ class Harness:
     """A RequestServer with its render loop driven by hand, and the caller's socket."""
 
     def __init__(
-        self, world: mujoco.MjModel, mode: str, accept_timeout: float = 5.0
+        self,
+        world: mujoco.MjModel,
+        mode: str,
+        accept_timeout: float = 5.0,
+        props: bool = False,
     ) -> None:
         self.model, self.data = world, mujoco.MjData(world)
         self.source = FakeSource()
@@ -83,6 +88,7 @@ class Harness:
             variant="placeholder",
             source=self.source,
             render=stub_render if mode == "sim" else None,
+            props=props,
             accept_timeout=accept_timeout,
             announce=self.announced.append,
         )
@@ -134,7 +140,7 @@ def test_ready_line_on_the_first_frame_only(world: mujoco.MjModel):
         harness.frame()
         harness.frame()
         assert harness.announced == [
-            f"NAOQI_VIEWER_READY port={harness.server.port} protocol=1"
+            f"NAOQI_VIEWER_READY port={harness.server.port} protocol=2"
         ]
     finally:
         harness.close()
@@ -143,7 +149,7 @@ def test_ready_line_on_the_first_frame_only(world: mujoco.MjModel):
 def test_hello_and_status(sim: Harness):
     header, _ = sim.request(op="hello", id=1)
     assert header["ok"] and header["id"] == 1
-    assert (header["protocol"], header["mode"]) == (1, "sim")
+    assert (header["protocol"], header["mode"]) == (2, "sim")
 
     header, _ = sim.request(op="status", id=2)
     assert (
@@ -414,3 +420,120 @@ def test_a_headless_viewer_serves_frames_that_follow_the_robot(
             moved = viewer.camera_frame("bottom", 320, 240)
         assert moved.pose_seq > before.pose_seq
     assert viewer.wait(timeout=5)  # close() ended the headless viewer process
+
+
+@pytest.mark.usefixtures("offscreen_gl")
+def test_a_headless_viewers_camera_sees_a_spawned_prop_until_it_is_despawned(
+    mock_naoqi: tuple[str, MockNaoqi],
+):
+    url, _ = mock_naoqi
+    config = replace(
+        headless_config(url), world=WorldSettings(scene="empty", variant="placeholder")
+    )
+
+    def red_pixels(viewer: NaoqiViewer) -> int:
+        image = viewer.camera_frame("top", 320, 240).image.astype(int)
+        return int(
+            ((image[..., 0] > 150) & (image[..., 1] < 80) & (image[..., 2] < 80)).sum()
+        )
+
+    with NaoqiViewer(config) as viewer:
+        wait_for_pose(viewer)
+        assert red_pixels(viewer) == 0
+        ball = viewer.props.spawn("object", (1.5, 0.0, 0.45), size=0.1)
+        assert red_pixels(viewer) > 50  # in the very next frame asked for
+        viewer.props.despawn(ball.name)
+        assert red_pixels(viewer) == 0
+
+
+@pytest.fixture(scope="module")
+def props_world() -> mujoco.MjModel:
+    return load_world("empty", variant="placeholder", props=True)
+
+
+@pytest.fixture
+def props_sim(props_world: mujoco.MjModel) -> Iterator[Harness]:
+    harness = Harness(props_world.__copy__(), "sim", props=True)
+    harness.connect()
+    yield harness
+    harness.close()
+
+
+def test_the_props_ops_drive_the_pool(props_sim: Harness):
+    header, _ = props_sim.request(op="props", id=1)
+    assert header["ok"] and len(header["props"]) == 12
+    assert not any(p["visible"] for p in header["props"])
+
+    header, _ = props_sim.request(
+        op="prop_spawn",
+        id=2,
+        kind="object",
+        pos=[1.5, 0, 0.4],
+        size=0.1,
+        color=[0, 1, 0],
+    )
+    assert header["ok"]
+    prop = header["prop"]
+    assert (prop["name"], prop["visible"], prop["pos"]) == (
+        "object_1",
+        True,
+        [1.5, 0, 0.4],
+    )
+    model, data = props_sim.model, props_sim.data
+    assert model.geom("object_1").rgba[3] == 1  # stepped before the reply
+    assert data.xpos[model.body("object_1").id] == pytest.approx((1.5, 0, 0.4))
+
+    header, _ = props_sim.request(
+        op="prop_place", id=3, name="object_1", pos=[2, 0, 0.4]
+    )
+    assert header["prop"]["pos"] == [2, 0, 0.4]
+    header, _ = props_sim.request(op="prop_despawn", id=4, name="object_1")
+    assert header["prop"]["visible"] is False
+    header, _ = props_sim.request(op="prop_spawn", id=5, kind="face", pos=[1, 0, 0.5])
+    assert header["prop"]["image"] == "armstrong"
+    header, _ = props_sim.request(op="props_clear", id=6)
+    assert not any(p["visible"] for p in header["props"])
+
+
+@pytest.mark.parametrize(
+    ("request_fields", "error"),
+    [
+        ({"op": "prop_despawn", "name": "face_9"}, "prop: no prop 'face_9'"),
+        ({"op": "prop_spawn", "kind": "object"}, "prop: prop_spawn needs kind and pos"),
+        ({"op": "prop_spawn", "kind": "ghost", "pos": [1, 0, 0]}, "prop: kind must be"),
+        (
+            {"op": "prop_place", "name": "face_1", "speed": 2},
+            "prop: unknown field(s) speed",
+        ),
+        ({"op": "prop_place"}, "prop: prop_place needs name"),
+    ],
+)
+def test_bad_props_requests_are_refused_as_prop_errors(
+    props_sim: Harness, request_fields: dict, error: str
+):
+    header, _ = props_sim.request(id=7, **request_fields)
+    assert header["ok"] is False and header["error"].startswith(error)
+
+
+def test_props_ops_are_refused_in_mirror_mode(world: mujoco.MjModel):
+    harness = Harness(world, "mirror")
+    harness.connect()
+    try:
+        header, _ = harness.request(op="props", id=1)
+        assert (header["ok"], header["error"]) == (False, "mode")
+    finally:
+        harness.close()
+
+
+def test_a_scene_using_a_props_name_is_a_startup_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    scene = tmp_path / "clash.xml"
+    scene.write_text(
+        '<mujoco><worldbody><body name="face_2"><geom size="0.1"/></body></worldbody></mujoco>'
+    )
+    config = NaoqiViewerConfig(
+        mode="sim", world=WorldSettings(scene=str(scene), variant="placeholder")
+    )
+    assert main([json.dumps(config.to_dict())]) == 1
+    assert "'face_2', a name reserved for the props pool" in capsys.readouterr().out

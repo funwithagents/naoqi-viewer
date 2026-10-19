@@ -32,6 +32,7 @@ def test_defaults():
         config.ghost,
         config.cameras_display,
         config.cameras_mirror,
+        config.people_display,
         config.launch_timeout_s,
     ) == (
         "empty",
@@ -39,6 +40,7 @@ def test_defaults():
         False,
         False,
         True,
+        False,
         30.0,
     )
 
@@ -60,6 +62,7 @@ def test_to_dict_round_trips_and_is_json():
         ghost=True,
         cameras_display=True,
         cameras_mirror=False,
+        people_display=True,
         launch_timeout_s=12,
     )
     data = config.to_dict()
@@ -71,6 +74,7 @@ def test_to_dict_round_trips_and_is_json():
         "ghost": True,
         "cameras_display": True,
         "cameras_mirror": False,
+        "people_display": True,
         "launch_timeout_s": 12,
     }
     assert NaoqiViewerConfig.from_json(json.dumps(data)) == config
@@ -103,6 +107,12 @@ def test_to_dict_round_trips_and_is_json():
             "cameras_display",
             "headless",
         ),
+        ({"people_display": "on"}, "people_display", "must be a boolean"),
+        (
+            {"mode": "sim", "headless": True, "people_display": True},
+            "people_display",
+            "headless",
+        ),
         ({"launch_timeout_s": 0}, "launch_timeout_s", "positive, finite"),
     ],
 )
@@ -117,6 +127,12 @@ def test_the_camera_display_is_valid_in_both_modes():
     for mode in ("mirror", "sim"):
         config = NaoqiViewerConfig.from_dict({"mode": mode, "cameras_display": True})
         assert config.cameras_display is True
+
+
+def test_the_people_display_is_valid_in_both_modes():
+    for mode in ("mirror", "sim"):
+        config = NaoqiViewerConfig.from_dict({"mode": mode, "people_display": True})
+        assert config.people_display is True
 
 
 def test_the_mirror_setting_needs_no_display():
