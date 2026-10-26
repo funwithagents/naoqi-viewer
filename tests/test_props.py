@@ -7,7 +7,7 @@ import mujoco
 import numpy as np
 import pytest
 
-from naoqi_viewer.model import NaoPose, PoseWriter, load_world
+from naoqi_viewer.model import load_world
 from naoqi_viewer.props import (
     FACE_IMAGES,
     OBJECT_POOL_SIZE,
@@ -16,8 +16,6 @@ from naoqi_viewer.props import (
     PropError,
     Props,
     PropState,
-    robot_frame,
-    robot_to_world,
 )
 
 
@@ -190,18 +188,25 @@ def test_a_timed_move_interpolates_and_retargets_without_a_jump(scene, clock: Cl
     assert not props.list()["object_1"].moving
 
 
-def test_a_face_looks_at_the_robot_from_either_side(scene):
+def test_a_faces_identity_rotation_shows_its_picture_toward_minus_x(scene):
+    """No intelligence: a face's rotation is the one given, identity by default, which shows
+    the picture upright toward -x, wherever the face is; a given yaw turns it about the
+    vertical, from there."""
     model, data, props = scene
-    torso = data.xpos[model.body("torso").id].copy()
-    for name, pos in (("face_1", (1.0, 0.6, 0.5)), ("face_2", (-0.5, -1.0, 0.5))):
-        props.spawn("face", pos, name=name)
+    for name, pos in (("face_1", (1.0, 0.0, 0.5)), ("face_2", (1.0, 0.8, 0.5))):
+        state = props.spawn("face", pos, name=name)
         props.step()
-        rotation = data.xmat[model.body(name).id].reshape(3, 3)
-        normal = rotation[:, 2]  # the plane's thin axis: where the picture faces
-        to_robot = torso[:2] - np.array(pos[:2])
-        to_robot /= np.linalg.norm(to_robot)
-        assert normal[:2] @ to_robot == pytest.approx(1.0, abs=1e-6)
+        assert state.quat == (1.0, 0.0, 0.0, 0.0)
+        rotation = data.geom_xmat[model.geom(name).id].reshape(3, 3)
+        assert rotation[:, 2] == pytest.approx(
+            (-1, 0, 0), abs=1e-6
+        )  # the picture's normal
         assert rotation[:, 1] == pytest.approx((0, 0, 1), abs=1e-6)  # upright
+    half = math.pi / 4  # a yaw of pi/2: the picture now shows toward -y
+    props.place("face_2", quat=(math.cos(half), 0, 0, math.sin(half)))
+    props.step()
+    rotation = data.geom_xmat[model.geom("face_2").id].reshape(3, 3)
+    assert rotation[:, 2] == pytest.approx((0, -1, 0), abs=1e-6)
 
 
 def test_step_writes_nothing_when_idle(scene):
@@ -255,62 +260,6 @@ def test_an_object_stands_upright_whatever_its_place(scene):
     geom = model.geom(pillar.name).id
     assert tuple(model.geom_aabb[geom][3:]) == pytest.approx((0.1, 0.1, 0.5))
     assert model.geom_rbound[geom] == pytest.approx(math.sqrt(0.01 + 0.01 + 0.25))
-
-
-def _yaw_quat(theta: float) -> tuple[float, float, float, float]:
-    return (math.cos(theta / 2), 0.0, 0.0, math.sin(theta / 2))
-
-
-@pytest.mark.parametrize("theta", [0.0, -0.133, 2.0, math.pi - 0.01, -math.pi + 0.01])
-def test_the_robot_frame_is_the_middle_of_the_feet_along_their_heading(
-    world, theta: float
-):
-    model = world.__copy__()
-    data = mujoco.MjData(model)
-    PoseWriter(model).apply(data, NaoPose({}, (0.3, -0.2, 0.3332), _yaw_quat(theta)))
-    props = Props(model, data)
-    x, y, heading = props.robot()
-    # Straight legs: the soles are right under the hips, on either side of the torso's axis.
-    assert (x, y) == pytest.approx((0.3, -0.2), abs=0.02)
-    assert math.remainder(heading - theta, 2 * math.pi) == pytest.approx(0, abs=1e-6)
-
-
-def test_robot_to_world_turns_and_moves_by_the_robots_pose():
-    pos, quat = robot_to_world((1.0, 2.0, math.pi / 2), (1.5, 0.0, 0.1), None)
-    assert pos == pytest.approx((1.0, 3.5, 0.1))  # 1.5 m ahead of a robot facing +y
-    assert quat is None
-    _, quat = robot_to_world((0.0, 0.0, 0.5), (0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0))
-    assert quat == pytest.approx(_yaw_quat(0.5))
-
-
-def test_robot_frame_handles_feet_pointing_either_side_of_pi():
-    def foot(yaw: float) -> tuple[list[float], list[list[float]]]:
-        c, s = math.cos(yaw), math.sin(yaw)
-        return [0.0, 0.0, 0.0], [[c, -s, 0], [s, c, 0], [0, 0, 1]]
-
-    heading = robot_frame([foot(math.pi - 0.1), foot(-math.pi + 0.1)])[2]
-    assert math.remainder(heading - math.pi, 2 * math.pi) == pytest.approx(0, abs=1e-9)
-
-
-def test_spawn_and_place_in_the_robot_frame_land_ahead_of_the_drawn_robot(world):
-    model = world.__copy__()
-    data = mujoco.MjData(model)
-    theta = -0.133  # NAOqi's odometry right after boot
-    PoseWriter(model).apply(data, NaoPose({}, (0.0, 0.0, 0.3332), _yaw_quat(theta)))
-    props = Props(model, data)
-    robot = props.robot()
-    ball = props.spawn("object", (1.5, 0.0, 0.1), frame="robot", size=0.1)
-    assert ball.pos == pytest.approx(robot_to_world(robot, (1.5, 0.0, 0.1), None)[0])
-    assert ball.pos == pytest.approx(
-        (1.5 * math.cos(theta), 1.5 * math.sin(theta), 0.1), abs=0.02
-    )
-    assert ball.quat == pytest.approx(
-        (1, 0, 0, 0)
-    )  # upright in the world, frame or not
-    moved = props.place(ball.name, (1.0, 0.5, 0.1), frame="robot")
-    assert moved.pos == pytest.approx(robot_to_world(robot, (1.0, 0.5, 0.1), None)[0])
-    with pytest.raises(PropError, match="frame"):
-        props.spawn("object", (1, 0, 0), frame="head")  # type: ignore[arg-type]
 
 
 def _texture(model: mujoco.MjModel, name: str) -> np.ndarray:

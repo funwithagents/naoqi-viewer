@@ -308,13 +308,12 @@ _PROP_OPS: dict[str, set[str]] = {
         "pos",
         "name",
         "quat",
-        "frame",
         "duration",
         "shape",
         "size",
         "color",
     },
-    "prop_place": {"name", "pos", "quat", "frame", "duration"},
+    "prop_place": {"name", "pos", "quat", "duration"},
     "prop_despawn": {"name"},
 }
 
