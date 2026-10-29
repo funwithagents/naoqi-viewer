@@ -17,7 +17,7 @@ tests:
 
 ## Purpose
 
-The window shows the people NAOqi knows about, as markers in the 3D scene where NAOqi says they are. NAOqi's people perception publishes its population in ALMemory under `PeoplePerception/`: the list of people, and for each one a position in the robot's frames. On a real robot `ALPeoplePerception` writes them; on naoqi-sim, whose desktop NAOqi has no perception engine, a client that runs its own detector on the camera stream publishes the same keys (naoqi-sim's `_overview.md`, "Perception and speech recognition"), so that `ALBasicAwareness` and `ALTracker` turn the head toward the person as on a NAO. Either way the keys are what NAOqi acts on, and this display draws them: a person watching sees where the robot believes people are, next to the robot's pose and, in sim mode, next to the face props a test placed ([props.md](props.md)), so a detector's error is a gap between a marker and a portrait.
+The window shows the people NAOqi knows about, as markers in the 3D scene where NAOqi says they are. NAOqi's people perception publishes its population in ALMemory under `PeoplePerception/`: the list of people, and for each one a position in the robot's frames. On a real robot `ALPeoplePerception` writes them; on naoqi-sim, whose desktop NAOqi has no perception engine, naoqi-sim's own `ALPeoplePerception` replacement writes them from the faces it detects on the camera stream (naoqi-sim's `people-perception.md`, since Oct 29, 2026; before that a client running its own detector had to publish the same keys, which one still may), so that `ALBasicAwareness` and `ALTracker` turn the head toward the person as on a NAO. Either way the keys are what NAOqi acts on, and this display draws them: a person watching sees where the robot believes people are, next to the robot's pose and, in sim mode, next to the face props a test placed ([props.md](props.md)), so a detector's error is a gap between a marker and a portrait.
 
 The display is read-only, costs NAOqi a few ALMemory reads a second, works in both modes, is off by default, and is drawn in the window only: a marker is never in a camera render, so a detector never sees one.
 
@@ -74,7 +74,7 @@ The window loop ([viewer.md](viewer.md)) draws the people each frame into `handl
 | Target | Markers |
 | --- | --- |
 | Real NAO (mirror mode) | `ALPeoplePerception`'s population, where the robot sees people |
-| naoqi-sim (sim mode) | What a client published: its detector's people, placed from its own estimate of their position. With a face prop in the scene, the marker should sit on the portrait; the gap is the client's error |
+| naoqi-sim (sim mode) | naoqi-sim's own people perception, or what a client published: the detector's people, placed from its estimate of their position. With a face prop in the scene, the marker should sit on the portrait; the gap is the detector's error |
 | Plain `naoqi-bin`, or naoqi-sim with no client publishing | `people: none` |
 
 ### Testing

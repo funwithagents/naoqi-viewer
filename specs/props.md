@@ -22,7 +22,7 @@ Something for the simulated robot to look at, put there and moved while the view
 
 Two kinds, for the two needs a test of a NAO program has:
 
-- **faces**: a portrait photo on a thin plane, so a client's own face or people detector, running on the frames naoqi-sim serves from the render, finds a person where the test put one (naoqi-sim replaces no perception module: its clients run their detectors on the camera stream, exactly as on a real robot);
+- **faces**: a portrait photo on a thin plane, so a face detector running on the frames naoqi-sim serves from the render finds a person where the test put one: since Oct 29, 2026 naoqi-sim's own `ALFaceDetection` and `ALPeoplePerception` replacements (its `face-detection.md` and `people-perception.md`), as on a real robot, and a client's own detector as before;
 - **objects**: a coloured primitive (a sphere, a box, a cylinder) with a size and a colour, so a test checks what the camera sees where the robot's pose says it should, or gives a colour tracker something to follow.
 
 This is the viewer's half, and it is geometry only: every prop has a pose in the scene, a position and a rotation, and the viewer puts it there, with no notion of NAOqi's frames and no behaviour of its own (a face is not turned toward the robot). naoqi-sim's `sim.props` drives it and manages the frames: positions relative to the robot, through NAOqi (naoqi-sim's `specs/host/props.md`). The mechanism: mocap bodies, a pool, visibility by alpha. naoqi-viewer compiles the scene itself through `MjSpec`, so the pool is appended in memory and no scene file is written, and the props are driven from the render loop rather than from a physics callback, since the viewer runs no physics.
@@ -35,7 +35,7 @@ MuJoCo cannot add bodies to a compiled model, so `load_world` ([model.md](model.
 
 | Kind | Props | Body | Geom |
 | --- | --- | --- | --- |
-| `face` | `face_1` … `face_4`, one per bundled portrait, in the order below | mocap | one box `FACE_SIZE` = 0.20 m wide, 0.25 m tall, 0.005 m thick, textured with the portrait: `emission="1"`, no specular, so the pixels reach the camera unshaded whatever the scene's light |
+| `face` | `face_1` … `face_4`, one per bundled portrait, in the order below | mocap | one box `FACE_SIZE` = 0.32 m wide, 0.40 m tall, 0.005 m thick (a life-size face, below), textured with the portrait: `emission="1"`, no specular, so the pixels reach the camera unshaded whatever the scene's light |
 | `object` | `object_1` … `object_8` (`OBJECT_POOL_SIZE = 8`) | mocap | one primitive, a sphere until spawned; its type, size and colour are set at spawn in `model.geom_type`, `geom_size` and `geom_rgba` (checked: MuJoCo's renderer reads them each frame) |
 
 - **Textures are compiled in**, one per portrait (`spec.add_texture` from the bundled PNG, as the meshes do, [meshes.md](meshes.md)), so a face's picture is fixed for the viewer's lifetime; swapping it at runtime would mean re-uploading the texture to the GL context (open question 2).
@@ -47,7 +47,7 @@ MuJoCo cannot add bodies to a compiled model, so `load_world` ([model.md](model.
 
 Four public-domain portraits in `src/naoqi_viewer/portraits/`, credited in its `ATTRIBUTION.md` (each a crop of a NASA photograph on Wikimedia Commons), one person each, cropped to the same framing (320×400 pixels, the face about half the height): `armstrong` (frontal), `chawla` (frontal), `schmid` (head turned about 30°), `malenchenko` (head tilted down). All four are works of NASA, a U.S. federal agency, so public domain: they may ship in the repository and the package, unlike Aldebaran's meshes ([_overview.md](_overview.md), Licensing). A prop is a person: `face_2` is always Chawla, so a test reads "`face_2` appears, moves, leaves". The two frontal faces come first, so a spawn without a name gets a frontal face.
 
-A face's apparent size is its distance: every face plane has the same `FACE_SIZE`, and a test makes one face bigger than another by spawning it nearer, as people at different distances are. At 1.0 m from a NAO head camera (60.97° across VGA, a focal length of 543 pixels) the plane is about 110 pixels wide and 135 tall, with the face itself about 70 pixels tall: well inside the range of common detectors at VGA, and still about 35 pixels tall at 2 m.
+A face's apparent size is its distance: every face plane has the same `FACE_SIZE`, and a test makes one face bigger than another by spawning it nearer, as people at different distances are. **The pictured face is life-size** (decided Oct 29, 2026, with naoqi-sim's own perception): the plane is 0.32 × 0.40 m so that the box a face detector draws on the portrait (about half the plane's height, measured with OpenCV's YuNet) is about 0.20 m tall, the real height naoqi-sim's `ALPeoplePerception` assumes when it turns a face's angular size into a distance; a prop at 1 m then reads about 1 m, as a person at 1 m in front of a webcam does. At 1.0 m from a NAO head camera (60.97° across VGA, a focal length of 543 pixels) the plane is about 174 pixels wide and 217 tall, the face box about 106 pixels tall: well inside the range of common detectors at VGA, and still about 53 pixels tall at 2 m. Before that date the plane was 0.20 × 0.25 m (the face about 70 pixels tall at 1 m).
 
 ### Driving the props: `Props` in `props.py`
 
