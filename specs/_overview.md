@@ -18,7 +18,7 @@ This overview is the map of the whole project. Each concept has its own spec (se
 | In scope | Out of scope |
 | --- | --- |
 | The NAO model: MJCF, joints, sensors, cameras, effector sites, placeholder visuals | Physics: the viewer never calls `mj_step`; the pose comes only from NAOqi |
-| Mirror mode: watching any NAO, with a status overlay and a ghost of the commanded pose | Writing to NAOqi: the viewer is read-only (only `check-model` moves joints, and refuses a real robot by default) |
+| Mirror mode: watching any NAO, with a status overlay and a ghost of the commanded pose | Writing to NAOqi: the viewer is read-only (only `check-model` moves joints, and refuses a real robot by default; the camera and people displays subscribe to the modules they show while they run) |
 | Sim mode: scenes around the robot, props (faces, objects) spawned and moved in them at runtime, head-camera renders on request, windowed or headless | Serving camera images to NAOqi clients (`putImage`, the colorspaces apps are served): naoqi-sim owns it |
 | Camera display: the two head cameras read from `ALVideoDevice` as pictures in the window, in both modes | Processing those images (detection, recording): the viewer only shows them |
 | People display: the people NAOqi lists in ALMemory, as markers in the window, in both modes | Publishing people to NAOqi (a detector, a fake population): the clients' or naoqi-sim's |
@@ -74,7 +74,7 @@ Both run the same loop and the same pose source; the mode only decides what the 
 
 - `ALMotion.getBodyNames("Body")`, `getAngles("Body", True/False)`, `getTransform("Torso", 1, True)`; for `check-model` also `setStiffnesses`, `angleInterpolation` and `getTransform(effector, 0, True)`.
 - With the camera display on: `ALVideoDevice.subscribeCameras`, `getImagesRemote`, `unsubscribe` and `unsubscribeAllInstances` ([cameras.md](cameras.md)). In sim mode the images are the ones naoqi-sim put there.
-- With the people display on: `ALMemory.getListData` of `PeoplePerception/PeopleList`, `VisiblePeopleList` and each person's `PositionInWorldFrame` ([people.md](people.md)): a real robot's own population, or what a client published on naoqi-sim.
+- With the people display on: `ALPeoplePerception.subscribe` at 200 ms and `unsubscribe`, and `ALMemory.getListData` of `PeoplePerception/PeopleList`, `VisiblePeopleList` and each person's `PositionInWorldFrame` ([people.md](people.md)): a real robot's own population, naoqi-sim's, or what a client published.
 - Target identification: the `NaoqiSim` service marks a naoqi-sim target, whose NAOqi version is the ALMemory key `NaoqiSim/NaoqiVersion`; `ALSystem` and `systemVersion()` mark a real robot; neither means a desktop virtual robot. These names are a contract with naoqi-sim.
 
 ### Dependencies

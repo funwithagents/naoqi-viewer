@@ -19,7 +19,7 @@ tests:
 
 The window shows the people NAOqi knows about, as markers in the 3D scene where NAOqi says they are. NAOqi's people perception publishes its population in ALMemory under `PeoplePerception/`: the list of people, and for each one a position in the robot's frames. On a real robot `ALPeoplePerception` writes them; on naoqi-sim, whose desktop NAOqi has no perception engine, naoqi-sim's own `ALPeoplePerception` replacement writes them from the faces it detects on the camera stream (naoqi-sim's `people-perception.md`, since Oct 29, 2026; before that a client running its own detector had to publish the same keys, which one still may), so that `ALBasicAwareness` and `ALTracker` turn the head toward the person as on a NAO. Either way the keys are what NAOqi acts on, and this display draws them: a person watching sees where the robot believes people are, next to the robot's pose and, in sim mode, next to the face props a test placed ([props.md](props.md)), so a detector's error is a gap between a marker and a portrait.
 
-The display is read-only, costs NAOqi a few ALMemory reads a second, works in both modes, is off by default, and is drawn in the window only: a marker is never in a camera render, so a detector never sees one.
+The display subscribes to `ALPeoplePerception` while it runs and otherwise only reads, costs NAOqi a few ALMemory reads a second, works in both modes, is off by default, and is drawn in the window only: a marker is never in a camera render, so a detector never sees one.
 
 ## Decided
 
@@ -56,6 +56,16 @@ class PeopleSource:
 - **The frame is the viewer's.** `PositionInWorldFrame` is NAOqi's `FRAME_WORLD`, the frame the viewer poses the torso in (`getTransform("Torso", 1, True)`, [source.md](source.md)), so a marker is placed at the key's coordinates with no offset. The sibling keys in the torso and robot frames are not read.
 - **Robustness**: a qi error or a disconnection keeps the last `People` (its age grows) and reconnects in the background; `close()` ends the thread and the session.
 
+### The subscription
+
+A NAO's `ALPeoplePerception`, like naoqi-sim's, computes the population only while some client subscribes to it, as `ALVideoDevice` captures only for its subscribers: a display that only read ALMemory would show nobody unless something else (awareness, a client) happened to subscribe. So the source subscribes, as the camera display subscribes to the cameras ([cameras.md](cameras.md)):
+
+- **`ALPeoplePerception.subscribe(SUBSCRIBER_NAME, SUBSCRIBE_PERIOD_MS, 0.0)`** at each connection, `SUBSCRIBER_NAME = "naoqi_viewer_people"`, `SUBSCRIBE_PERIOD_MS = 200`: `ALBasicAwareness`'s period, so the display never asks a robot for more than its awareness does. Again after a reconnect: a restarted NAOqi has forgotten it.
+- **One fixed name.** An extractor keeps one subscription per name, so the next viewer's subscription replaces one a crashed viewer left running, with no cleanup step (the camera display needs `unsubscribeAllInstances` for that). Two viewers on one NAOqi share it, and the first to close ends it; the second's markers then follow whatever else subscribes.
+- **`close()` unsubscribes**, asynchronously with a one-second bound (`UNSUBSCRIBE_TIMEOUT`), so closing never waits on a NAOqi that went away.
+- **No `ALPeoplePerception`, or a refused call** (a target without the module): logged once, at warning level, and the display carries on reading ALMemory, where a client may publish people itself.
+- **On a real robot** the display turns its people perception on while it runs: the robot processes its top camera at 5 Hz, as its awareness would. Watching what a robot perceives is the display's purpose; a viewer with `people_display` off subscribes to nothing.
+
 ### The markers (window only)
 
 The window loop ([viewer.md](viewer.md)) draws the people each frame into `handle.user_scn`, after the ghost's geoms, with `mjv_initGeom`: one sphere per person, `PERSON_RADIUS = 0.10` m (a head), at `pos`, labelled with the person's id (the geom's `label`). A visible person is `PERSON_VISIBLE_RGBA` (yellow, alpha 0.6); one in `PeopleList` but not in `VisiblePeopleList` is `PERSON_HIDDEN_RGBA` (grey, alpha 0.3): NAOqi still tracks them but does not see them. `user_scn` is drawn over the model's geoms and is not part of the offscreen renderers' scenes, so the camera frames never contain a marker; the ghost relies on the same property.
@@ -73,13 +83,13 @@ The window loop ([viewer.md](viewer.md)) draws the people each frame into `handl
 
 | Target | Markers |
 | --- | --- |
-| Real NAO (mirror mode) | `ALPeoplePerception`'s population, where the robot sees people |
-| naoqi-sim (sim mode) | naoqi-sim's own people perception, or what a client published: the detector's people, placed from its estimate of their position. With a face prop in the scene, the marker should sit on the portrait; the gap is the detector's error |
+| Real NAO (mirror mode) | `ALPeoplePerception`'s population, where the robot sees people; the display's subscription keeps it computing |
+| naoqi-sim (sim mode) | naoqi-sim's own people perception, which runs because the display subscribes, or what a client published: the detector's people, placed from its estimate of their position. With a face prop in the scene, the marker should sit on the portrait; the gap is the detector's error |
 | Plain `naoqi-bin`, or naoqi-sim with no client publishing | `people: none` |
 
 ### Testing
 
-**Fast tier** (`tests/test_people.py`, `tests/test_viewer.py`, the mock NAOqi of [testing.md](testing.md), which gains the `PeoplePerception/` keys): `PeopleSource` reads two persons with their positions and visibility, skips an id without a position, reports nobody on an absent list, keeps the last `People` through a failing call and reconnects after a restart, closes promptly; `ViewerState` with a fake source draws one labelled sphere per person in the right colours, nothing when stale, and the status line's four readings; `config.py`: the field's default, round trip, type check, the `ConfigError` with `headless`.
+**Fast tier** (`tests/test_people.py`, `tests/test_viewer.py`, the mock NAOqi of [testing.md](testing.md), which gains the `PeoplePerception/` keys): `PeopleSource` reads two persons with their positions and visibility, skips an id without a position, reports nobody on an absent list, keeps the last `People` through a failing call and reconnects after a restart, closes promptly; subscribes to `ALPeoplePerception` at 200 ms while it runs and unsubscribes at close, subscribes again after a NAOqi restart, and still reads the keys on a target without the module; `ViewerState` with a fake source draws one labelled sphere per person in the right colours, nothing when stale, and the status line's four readings; `config.py`: the field's default, round trip, type check, the `ConfigError` with `headless`.
 
 **Live tier** (`tests-e2e/test_people_live.py`, on `NAOQI_URL`): the test writes a person into ALMemory (`insertData` of the three keys), and a `PeopleSource` reports them at the written position (ALMemory keeps float32, so approximately); the keys are removed after. A windowed run also opens a sim viewer with `people_display` on and a person published, and checks it draws for a while without failing.
 

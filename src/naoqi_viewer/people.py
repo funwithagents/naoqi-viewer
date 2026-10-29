@@ -1,8 +1,10 @@
 """People display: the people NAOqi lists under `PeoplePerception/` in ALMemory, read on their own
 thread and drawn as markers in the window (specs/people.md).
 
-`PeopleSource` is the camera source's sibling: its own qi session, a fixed polling schedule, the
-newest result in a slot the window reads without blocking, reconnection with backoff. The pure
+`PeopleSource` is the camera source's sibling: its own qi session, a subscription to
+ALPeoplePerception while it runs (so NAOqi computes the people someone is watching, as the camera
+display's subscription makes it capture), a fixed polling schedule, the newest result in a slot the
+window reads without blocking, reconnection with backoff. The pure
 functions (`decode_people`, `person_markers`) are what the tests pin without a NAOqi or a window.
 """
 
@@ -18,6 +20,14 @@ from naoqi_viewer.source import connect, normalize_url
 _log = logging.getLogger(__name__)
 
 PEOPLE_RATE_HZ = 10
+SUBSCRIBER_NAME = "naoqi_viewer_people"
+SUBSCRIBE_PERIOD_MS = (
+    200  # ALBasicAwareness's period: the display asks no faster than awareness
+)
+UNSUBSCRIBE_TIMEOUT = (
+    1.0  # s: how long close() gives NAOqi to acknowledge the unsubscribe
+)
+_ASYNC_POLL = 0.01
 PEOPLE_LIST = "PeoplePerception/PeopleList"
 VISIBLE_LIST = "PeoplePerception/VisiblePeopleList"
 POSITION_KEY = "PeoplePerception/Person/{id}/PositionInWorldFrame"
@@ -127,6 +137,9 @@ class PeopleSource:
         self._latest: People | None = None
         self._seq = 0
         self._received: deque[float] = deque()
+        self._subscribe_warned = (
+            False  # a target without ALPeoplePerception is logged once
+        )
         self._thread = threading.Thread(
             target=self._run, name=f"PeopleSource {self._url}", daemon=True
         )
@@ -151,9 +164,11 @@ class PeopleSource:
         delay = _RECONNECT_FIRST_DELAY
         while not self._stop.is_set():
             session = None
+            people = None
             try:
                 session = connect(self._url, cancel=self._stop)
                 memory = session.service("ALMemory")
+                people = self._subscribe(session)
                 delay = _RECONNECT_FIRST_DELAY
                 self._poll(memory)
             except (RuntimeError, ConnectionError, ValueError, TypeError) as exc:
@@ -167,10 +182,49 @@ class PeopleSource:
                 )
             finally:
                 if session is not None:
+                    if people is not None:
+                        self._unsubscribe(people)
                     session.close()
             if self._stop.wait(delay):
                 break
             delay = min(delay * 2, _RECONNECT_MAX_DELAY)
+
+    def _subscribe(self, session: Any) -> Any:
+        """Subscribes to ALPeoplePerception, so a NAOqi whose perception runs only while
+        subscribed (a NAO's, naoqi-sim's) computes the people this display shows. One fixed name:
+        a viewer that crashed is replaced by the next one's subscription instead of leaving its
+        own running. A target without the module, or refusing the call, is logged once; the
+        display still reads ALMemory, where a client may publish the people itself."""
+        try:
+            people = session.service("ALPeoplePerception")
+            people.subscribe(SUBSCRIBER_NAME, SUBSCRIBE_PERIOD_MS, 0.0)
+        except RuntimeError as exc:
+            if not self._subscribe_warned:
+                self._subscribe_warned = True
+                _log.warning(
+                    "people of NAOqi at %s: no ALPeoplePerception subscription (%s); "
+                    "showing what ALMemory holds",
+                    self._url,
+                    exc,
+                )
+            return None
+        _log.info(
+            "subscribed to the people perception of %s as %s (%d ms)",
+            self._url,
+            SUBSCRIBER_NAME,
+            SUBSCRIBE_PERIOD_MS,
+        )
+        return people
+
+    def _unsubscribe(self, people: Any) -> None:
+        """Best effort, bounded: a NAOqi that went away must not hold up a close."""
+        try:
+            future = people.unsubscribe(SUBSCRIBER_NAME, _async=True)
+            deadline = time.monotonic() + UNSUBSCRIBE_TIMEOUT
+            while not future.isFinished() and time.monotonic() < deadline:
+                time.sleep(_ASYNC_POLL)
+        except RuntimeError:
+            pass
 
     def read(self, memory: Any) -> tuple[Person, ...]:
         lists = memory.getListData([PEOPLE_LIST, VISIBLE_LIST])

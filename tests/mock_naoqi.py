@@ -132,6 +132,24 @@ class _VideoDevice:
         return self._mock._call("ALVideoDevice", "getSubscribers")
 
 
+class _PeoplePerception:
+    """ALPeoplePerception's extractor subscriptions, as the people display uses them."""
+
+    def __init__(self, mock: "MockNaoqi") -> None:
+        self._mock = mock
+
+    def subscribe(self, name: str, period: int, precision: float) -> None:
+        self._mock._call(
+            "ALPeoplePerception", "subscribePeople", name, period, precision
+        )
+
+    def unsubscribe(self, name: str) -> None:
+        self._mock._call("ALPeoplePerception", "unsubscribePeople", name)
+
+    def getSubscribersInfo(self) -> list[Any]:
+        return self._mock._call("ALPeoplePerception", "peopleSubscribers")
+
+
 class _NaoqiSim:
     def ping(self) -> bool:
         return True
@@ -153,6 +171,7 @@ class MockNaoqi:
         target: Target = "virtual",
         version: str = "2.1.4.13",
         body_names: Sequence[str] = JOINT_NAMES,
+        people_perception: bool = True,
     ) -> None:
         self.target: Target = target
         self.version = version
@@ -169,6 +188,9 @@ class MockNaoqi:
             str, list[int]
         ] = {}  # subscription name -> camera indexes
         self._images: dict[int, np.ndarray] = {}  # camera index -> RGB image
+        self.people_perception = people_perception  # serve ALPeoplePerception
+        # ALPeoplePerception subscription name -> [period, precision]
+        self._people_subscriptions: dict[str, list[Any]] = {}
         self._failure: str | None = None
         self._session: Any = None
         self.url = "tcp://127.0.0.1:0"
@@ -188,6 +210,8 @@ class MockNaoqi:
         session.registerService("ALMotion", _Motion(self))
         session.registerService("ALMemory", _Memory(self))
         session.registerService("ALVideoDevice", _VideoDevice(self))
+        if self.people_perception:
+            session.registerService("ALPeoplePerception", _PeoplePerception(self))
         if self.target == "naoqi-sim":
             with self._lock:
                 # naoqi-sim publishes its own version too: identification must not read it.
@@ -211,6 +235,7 @@ class MockNaoqi:
         self.disconnect()
         with self._lock:
             self._subscriptions.clear()
+            self._people_subscriptions.clear()
         self.start()
 
     def close(self) -> None:
@@ -253,6 +278,11 @@ class MockNaoqi:
             else:
                 self._images[index] = np.ascontiguousarray(image, dtype=np.uint8)
 
+    def people_subscribers(self) -> dict[str, list[Any]]:
+        """The live ALPeoplePerception subscriptions: name -> [period, precision]."""
+        with self._lock:
+            return {n: list(v) for n, v in self._people_subscriptions.items()}
+
     def subscribers(self) -> list[str]:
         """The live ALVideoDevice subscription names."""
         with self._lock:
@@ -279,6 +309,15 @@ class MockNaoqi:
             ):
                 raise RuntimeError(self._failure)
             return getattr(self, f"_{method}")(*args)
+
+    def _subscribePeople(self, name: str, period: int, precision: float) -> None:
+        self._people_subscriptions[name] = [period, precision]
+
+    def _unsubscribePeople(self, name: str) -> None:
+        self._people_subscriptions.pop(name, None)
+
+    def _peopleSubscribers(self) -> list[Any]:
+        return [[n, p, pr] for n, (p, pr) in self._people_subscriptions.items()]
 
     def _getBodyNames(self, name: str) -> list[str]:
         return list(self._body_names)
