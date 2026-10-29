@@ -11,6 +11,8 @@ from naoqi_viewer.people import (
     PERSON_HIDDEN_RGBA,
     PERSON_VISIBLE_RGBA,
     POSITION_KEY,
+    SUBSCRIBE_PERIOD_MS,
+    SUBSCRIBER_NAME,
     VISIBLE_LIST,
     People,
     PeopleSource,
@@ -123,3 +125,52 @@ def test_the_source_polls_at_its_rate(mock_naoqi: tuple[str, MockNaoqi], rate: f
         assert rate * 0.6 <= source.rate() <= rate + 1
     finally:
         source.close()
+
+
+def wait_until(predicate, timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return
+        time.sleep(0.02)
+    raise AssertionError(f"not true within {timeout} s")
+
+
+def test_the_source_subscribes_to_people_perception_while_it_runs(
+    mock_naoqi: tuple[str, MockNaoqi],
+):
+    url, mock = mock_naoqi
+    source = PeopleSource(url)
+    try:
+        wait_until(lambda: SUBSCRIBER_NAME in mock.people_subscribers())
+        assert mock.people_subscribers()[SUBSCRIBER_NAME] == [SUBSCRIBE_PERIOD_MS, 0.0]
+        assert SUBSCRIBE_PERIOD_MS == 200  # awareness's period, no faster
+    finally:
+        source.close()
+    assert mock.people_subscribers() == {}
+
+
+def test_the_source_subscribes_again_after_a_restart(mock_naoqi: tuple[str, MockNaoqi]):
+    url, mock = mock_naoqi
+    source = PeopleSource(url)
+    try:
+        wait_until(lambda: SUBSCRIBER_NAME in mock.people_subscribers())
+        mock.restart()  # a restarted NAOqi has lost the subscription
+        assert mock.people_subscribers() == {}
+        wait_until(lambda: SUBSCRIBER_NAME in mock.people_subscribers(), timeout=10)
+    finally:
+        source.close()
+
+
+def test_a_target_without_people_perception_still_shows_what_memory_holds():
+    mock = MockNaoqi(people_perception=False).start()
+    try:
+        publish(mock, {7: [1.0, 0.0, 1.6]}, visible=[7])
+        source = PeopleSource(mock.url)
+        try:
+            people = wait_for(source, lambda p: len(p.persons) == 1)
+            assert people.persons[0].id == 7
+        finally:
+            source.close()
+    finally:
+        mock.close()
