@@ -6,5 +6,6 @@
   "ghost": false,
   "cameras_display": false,
   "cameras_mirror": true,
+  "people_display": false,
   "launch_timeout_s": 30
 }

@@ -50,4 +50,4 @@ def test_a_closed_connection_is_eof_even_mid_message():
 
 
 def test_ready_line():
-    assert protocol.ready_line(51234) == "NAOQI_VIEWER_READY port=51234 protocol=1"
+    assert protocol.ready_line(51234) == "NAOQI_VIEWER_READY port=51234 protocol=2"

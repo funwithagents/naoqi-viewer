@@ -340,17 +340,37 @@ _ASSET_SUFFIXES = {
 }
 
 
+# The props' public-domain portraits (specs/props.md), allowed one by one: nothing else.
+_PORTRAITS_DIR = Path("src/naoqi_viewer/portraits")
+_PORTRAITS = {
+    _PORTRAITS_DIR / f"{name}.png"
+    for name in ("armstrong", "chawla", "schmid", "malenchenko")
+}
+
+
+def _assets(paths: list[Path]) -> list[Path]:
+    return [
+        p for p in paths if p.suffix.lower() in _ASSET_SUFFIXES and p not in _PORTRAITS
+    ]
+
+
 def test_no_mesh_texture_installer_or_archive_is_tracked():
     tracked = subprocess.run(
         ["git", "ls-files"], cwd=REPO, capture_output=True, text=True, check=True
     ).stdout.split()
-    assert [f for f in tracked if Path(f).suffix.lower() in _ASSET_SUFFIXES] == []
+    assert _assets([Path(f) for f in tracked]) == []
 
 
 def test_the_package_holds_no_mesh_texture_or_archive():
     package = REPO / "src" / "naoqi_viewer"
-    found = [p for p in package.rglob("*") if p.suffix.lower() in _ASSET_SUFFIXES]
-    assert found == []
+    assert _assets([p.relative_to(REPO) for p in package.rglob("*")]) == []
+
+
+def test_every_allowed_portrait_is_credited():
+    attribution = (REPO / _PORTRAITS_DIR / "ATTRIBUTION.md").read_text()
+    for portrait in _PORTRAITS:
+        assert (REPO / portrait).is_file()
+        assert f"`{portrait.name}`" in attribution
 
 
 # --- CI's pseudo-terminal driver ------------------------------------------------------

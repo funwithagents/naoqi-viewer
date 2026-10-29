@@ -32,3 +32,7 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 ```
+
+## Portraits (NASA, public domain)
+
+`src/naoqi_viewer/portraits/*.png` are crops of four NASA photographs on Wikimedia Commons, the faces of the props' pool (specs/props.md). As works of a U.S. federal government agency they are in the public domain; each source and author is listed in `src/naoqi_viewer/portraits/ATTRIBUTION.md`.

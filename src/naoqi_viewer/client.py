@@ -21,6 +21,14 @@ import numpy as np
 
 from naoqi_viewer import protocol
 from naoqi_viewer.config import NaoqiViewerConfig
+from naoqi_viewer.props import (
+    DEFAULT_OBJECT_COLOR,
+    DEFAULT_OBJECT_SIZE,
+    Kind,
+    PropError,
+    PropState,
+    Shape,
+)
 
 _process_log = logging.getLogger("naoqi_viewer.viewer_process")
 _LEVELS = {
@@ -67,6 +75,79 @@ class ViewerStatus:
     rate: float  # pose updates per second
     pose_seq: int
     data_age: float | None  # s; None before the first sample
+
+
+def _floats(value: Any) -> Any:
+    """A position, quaternion, size or colour as JSON: numbers and sequences of them."""
+    if value is None or isinstance(value, int | float):
+        return value
+    try:
+        return [float(v) for v in value]
+    except (TypeError, ValueError):
+        return value  # the viewer process refuses it with a PropError naming it
+
+
+class PropsClient:
+    """The props of a sim-mode viewer (props.md): each call is one request, serialized with the
+    viewer's other calls. Poses are in the scene's frame: a position (m) and a rotation (w, x, y,
+    z quaternion), identity by default."""
+
+    def __init__(self, viewer: "NaoqiViewer") -> None:
+        self._viewer = viewer
+
+    def list(self) -> dict[str, PropState]:
+        header, _ = self._viewer._prop_request("props")
+        return {s["name"]: PropState.from_dict(s) for s in header["props"]}
+
+    def spawn(
+        self,
+        kind: Kind,
+        pos: Any,
+        *,
+        name: str | None = None,
+        quat: Any = None,
+        duration: float = 0.0,
+        shape: Shape = "sphere",
+        size: Any = DEFAULT_OBJECT_SIZE,
+        color: Any = DEFAULT_OBJECT_COLOR,
+    ) -> PropState:
+        fields: dict[str, Any] = {
+            "kind": kind,
+            "pos": _floats(pos),
+            "duration": duration,
+        }
+        if name is not None:
+            fields["name"] = name
+        if quat is not None:
+            fields["quat"] = _floats(quat)
+        if kind == "object":
+            fields.update(shape=shape, size=_floats(size), color=_floats(color))
+        header, _ = self._viewer._prop_request("prop_spawn", **fields)
+        return PropState.from_dict(header["prop"])
+
+    def place(
+        self,
+        name: str,
+        pos: Any = None,
+        quat: Any = None,
+        *,
+        duration: float = 0.0,
+    ) -> PropState:
+        fields: dict[str, Any] = {"name": name, "duration": duration}
+        if pos is not None:
+            fields["pos"] = _floats(pos)
+        if quat is not None:
+            fields["quat"] = _floats(quat)
+        header, _ = self._viewer._prop_request("prop_place", **fields)
+        return PropState.from_dict(header["prop"])
+
+    def despawn(self, name: str) -> PropState:
+        header, _ = self._viewer._prop_request("prop_despawn", name=name)
+        return PropState.from_dict(header["prop"])
+
+    def clear(self) -> dict[str, PropState]:
+        header, _ = self._viewer._prop_request("props_clear")
+        return {s["name"]: PropState.from_dict(s) for s in header["props"]}
 
 
 def _viewer_command(config: NaoqiViewerConfig) -> list[str]:
@@ -284,6 +365,20 @@ class NaoqiViewer:
             image, header["camera"], header["pose_seq"], header["pose_age"]
         )
 
+    @property
+    def props(self) -> PropsClient:
+        """The props of the simulated world (sim mode only, props.md)."""
+        return PropsClient(self)
+
+    def _prop_request(
+        self, op: str, **fields: Any
+    ) -> tuple[protocol.Header, bytearray]:
+        if self._config.mode != "sim":
+            raise ModeError(
+                "props are only available in sim mode: a real robot's cameras cannot see them"
+            )
+        return self._request(op, **fields)
+
     def status(self) -> ViewerStatus:
         header, _ = self._request("status")
         return ViewerStatus(
@@ -354,5 +449,7 @@ class NaoqiViewer:
             error = header.get("error")
             if error == "mode":
                 raise ModeError(f"{op} isn't available in {self._config.mode} mode")
+            if isinstance(error, str) and error.startswith("prop: "):
+                raise PropError(error.removeprefix("prop: "))
             raise RuntimeError(f"the viewer refused {op}: {error}")
         return header, payload

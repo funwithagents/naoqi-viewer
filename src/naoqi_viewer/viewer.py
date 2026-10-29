@@ -20,6 +20,12 @@ from naoqi_viewer.cameras import (
     resample_nearest,
 )
 from naoqi_viewer.model import PoseWriter
+from naoqi_viewer.people import (
+    PERSON_RADIUS,
+    PeopleReader,
+    people_status,
+    person_markers,
+)
 from naoqi_viewer.source import PoseSource, Sample
 
 STALE_AFTER = 0.5  # s of data age before the overlay reads STALE
@@ -62,8 +68,10 @@ class ViewerState:
         attribution: str | None = None,
         cameras: ImageSource | None = None,
         cameras_mirror: bool = True,
+        people: PeopleReader | None = None,
     ) -> None:
         self.model = model
+        self._people = people
         self.data = mujoco.MjData(model)
         self.show_status = True
         self.show_cameras = True
@@ -121,6 +129,28 @@ class ViewerState:
                 else (0, 0, 0, 0)
             )
             geom.matid = -1
+
+    def draw_people(self, scene: mujoco.MjvScene, now: float) -> None:
+        """Append one labelled sphere per person NAOqi lists to `scene`, after what is there (the
+        ghost); nothing without a people source, before its first answer or when stale."""
+        if self._people is None:
+            return
+        size = np.array([PERSON_RADIUS, 0.0, 0.0])
+        identity = np.eye(3).flatten()
+        for marker in person_markers(self._people.latest(), now):
+            if scene.ngeom >= scene.maxgeom:
+                break
+            geom = scene.geoms[scene.ngeom]
+            mujoco.mjv_initGeom(
+                geom,
+                mujoco.mjtGeom.mjGEOM_SPHERE,
+                size,
+                np.array(marker.pos),
+                identity,
+                np.array(marker.rgba, dtype=np.float32),
+            )
+            geom.label = marker.label
+            scene.ngeom += 1
 
     def _bodies_apart(self) -> set[int]:
         assert self._ghost is not None
@@ -235,6 +265,9 @@ class ViewerState:
                         "NO IMAGE",
                     )
                 )
+        if self._people is not None:
+            labels.append("people")
+            values.append(people_status(self._people.latest(), now))
         return labels, values
 
 
@@ -256,6 +289,7 @@ def run(
     attribution: str | None = None,
     cameras: ImageSource | None = None,
     cameras_mirror: bool = True,
+    people: PeopleReader | None = None,
     on_frame: FrameHook | None = None,
     stop: threading.Event | None = None,
 ) -> None:
@@ -275,6 +309,7 @@ def run(
         attribution=attribution,
         cameras=cameras,
         cameras_mirror=cameras_mirror,
+        people=people,
     )
     with mujoco.viewer.launch_passive(
         model,
@@ -294,6 +329,7 @@ def run(
             with handle.lock():
                 state.update()
                 state.draw_ghost(handle.user_scn)
+                state.draw_people(handle.user_scn, time.monotonic())
             handle.set_texts(state.texts(time.monotonic()))
             if cameras is not None:
                 _draw_pictures(handle, state)
