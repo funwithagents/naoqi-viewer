@@ -26,7 +26,10 @@ KINDS: tuple[Kind, ...] = ("face", "object")
 SHAPES: tuple[Shape, ...] = ("sphere", "box", "cylinder")
 PORTRAITS_DIR = Path(__file__).parent / "portraits"
 FACE_IMAGES: tuple[str, ...] = ("armstrong", "chawla", "schmid", "malenchenko")
-FACE_SIZE: Vec3 = (0.20, 0.25, 0.005)  # width, height, thickness (m)
+# width, height, thickness (m): the portrait's face (about half the plane's height) is life-size,
+# the box a face detector draws on it about 0.20 m tall, what naoqi-sim's people perception sizes
+# a person's distance on (its people-perception.md)
+FACE_SIZE: Vec3 = (0.32, 0.40, 0.005)
 OBJECT_POOL_SIZE = 8
 PARKED_POS: Vec3 = (0.0, 0.0, -1.0)  # below the floor, hidden anyway
 DEFAULT_OBJECT_SIZE = 0.05
