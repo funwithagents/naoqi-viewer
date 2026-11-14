@@ -2,7 +2,7 @@
 
 naoqi-viewer is the MuJoCo window for NAO. It is a **kinematic mirror, not a physics simulation**: it reads joint angles and the torso pose from any NAOqi endpoint over qi, writes them into the NAO model's `qpos`, runs `mj_kinematics` and renders. The same viewer watches a real robot (**mirror** mode) or acts as naoqi-sim's simulated world (**sim** mode), where naoqi-sim chooses a scene and pulls head-camera renders to inject into `ALVideoDevice`. naoqi-viewer also owns the NAO model: one MJCF, converted once from the BSD-3 URDF, committed, and drawn with placeholder visuals of our own.
 
-It is one of the three packages of the NAO toolkit (naoqi-bridge, naoqi-sim, naoqi-viewer), unofficial and MIT-licensed, not affiliated with Aldebaran, and it ships no Aldebaran assets.
+It is one of the three packages of the NAO toolkit (naoqi-bridge, naoqi-sim, naoqi-viewer), unofficial and Apache-2.0-licensed, not affiliated with Aldebaran, and it ships no Aldebaran assets.
 
 This overview is the map of the whole project. Each concept has its own spec (see [_index.md](_index.md) for the list and statuses); the sections here only summarize them and link to them. Where this page and a concept spec disagree, the concept spec wins.
 
@@ -101,17 +101,17 @@ naoqi-viewer depends on libqi (`qi`), `mujoco`, `numpy`, `platformdirs` and `pyy
 
 ## Licensing
 
-The code is MIT.
+The code is Apache-2.0.
 
 | Asset | Source | License | In the repository or a package? |
 | --- | --- | --- | --- |
-| Code, `nao.xml` with its placeholder visuals, scenes | this repository | MIT | Yes |
+| Code, `nao.xml` with its placeholder visuals, scenes | this repository | Apache-2.0 | Yes |
 | The four portraits of the props' face pool (`src/naoqi_viewer/portraits/`) | NASA photographs on Wikimedia Commons, cropped; credited in `portraits/ATTRIBUTION.md` | Public domain (works of a U.S. federal agency) | Yes ([props.md](props.md)) |
 | NAO URDF (`third_party/nao_description/`) | [ros-naoqi/nao_robot](https://github.com/ros-naoqi/nao_robot) at a pinned commit | BSD-3-Clause | Yes, vendored with its license; notice in `THIRD_PARTY_NOTICES.md`. Nothing reads it at runtime; tests check `nao.xml` against it |
 | libqi Python 3 wheels | [funwithagents/libqi-python](https://github.com/funwithagents/libqi-python) GitHub Releases | BSD-3-Clause | A runtime dependency, not vendored |
 | NAO meshes and textures | Aldebaran's `ros-naoqi/nao_meshes` installer, converted once to OBJ and PNG and published encrypted by [funwithagents/naoqi-meshes](https://github.com/funwithagents/naoqi-meshes) | CC BY-NC-ND 4.0 (**non-commercial**) | **Never.** Unlocked per user after typing `yes`, kept in `platformdirs.user_data_dir("naoqi-viewer")`; the compiled model with them exists only in memory |
 
-- The placeholder visuals are our own work and are never derived from the meshes (no tracing or fitting), so they stay MIT ([model.md](model.md)).
+- The placeholder visuals are our own work and are never derived from the meshes (no tracing or fitting), so they stay Apache-2.0 ([model.md](model.md)).
 - `.gitignore` blocks mesh, texture, installer and archive files. Whenever the meshes are visible, the window shows an attribution to Aldebaran with the license name ([viewer.md](viewer.md)).
 
 ## NAOqi versions
