@@ -67,6 +67,12 @@ def world() -> mujoco.MjModel:
     return load_world("table", variant="placeholder")
 
 
+# An age is computed as `monotonic() - (monotonic() - x)`. When both reads fall in the same
+# clock step (about 15.6 ms on Windows), the result is x minus a float rounding error, so a
+# lower bound of exactly x fails for no real reason.
+CLOCK_SLACK_S = 1e-6
+
+
 class Harness:
     """A RequestServer with its render loop driven by hand, and the caller's socket."""
 
@@ -178,7 +184,7 @@ def test_hello_and_status(sim: Harness):
         48.0,
         9,
     )
-    assert 0.05 <= header["data_age"] < 1.0
+    assert 0.05 - CLOCK_SLACK_S <= header["data_age"] < 1.0
 
 
 def test_camera_frame_reports_the_pose_it_was_rendered_with(sim: Harness):
@@ -196,7 +202,7 @@ def test_camera_frame_reports_the_pose_it_was_rendered_with(sim: Harness):
         time.monotonic() - 0.03,
     )
     header, _ = sim.request(op="camera_frame", id=5, camera="top", width=64, height=48)
-    assert header["pose_seq"] == 5 and 0.03 <= header["pose_age"] < 1.0
+    assert header["pose_seq"] == 5 and 0.03 - CLOCK_SLACK_S <= header["pose_age"] < 1.0
 
 
 def test_bad_camera_requests_are_refused(sim: Harness):
