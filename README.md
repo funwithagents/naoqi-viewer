@@ -114,4 +114,4 @@ The project is spec-driven: start with [specs/_overview.md](specs/_overview.md) 
 
 ## License
 
-The code, the model (`nao.xml`) and the scenes are under the MIT license ([LICENSE](LICENSE)). The vendored NAO URDF is BSD-3-Clause ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). Aldebaran's meshes are not part of this repository (see above).
+The code, the model (`nao.xml`) and the scenes are under the Apache-2.0 license ([LICENSE](LICENSE), [NOTICE](NOTICE)). The vendored NAO URDF is BSD-3-Clause ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). Aldebaran's meshes are not part of this repository (see above).
