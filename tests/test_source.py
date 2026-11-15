@@ -7,6 +7,7 @@ from contextlib import closing, contextmanager, suppress
 
 import pytest
 from mock_naoqi import MockNaoqi, Target
+from rates import assert_rate_settles
 
 from naoqi_viewer.model import JOINT_NAMES
 from naoqi_viewer.source import NaoqiSource, Sample, connect, normalize_url
@@ -66,8 +67,7 @@ def test_rate_follows_rate_hz(
     url, _ = mock_naoqi
     with closing(NaoqiSource(url, rate_hz=rate_hz)) as src:
         first_sample(src)
-        time.sleep(1.2)
-        assert low <= src.rate() <= high
+        assert_rate_settles(src.rate, low, high)
 
 
 def test_commanded_angles_when_requested(mock_naoqi: tuple[str, MockNaoqi]):
