@@ -6,6 +6,7 @@ from contextlib import closing
 import numpy as np
 import pytest
 from mock_naoqi import MockNaoqi
+from rates import assert_rate_settles
 
 from naoqi_viewer import cameras
 from naoqi_viewer.cameras import (
@@ -112,8 +113,7 @@ def test_rate_follows_fps(
     mock.set_image("top", gradient(1))
     with closing(CameraSource(url, fps=fps)) as src:
         wait_until(lambda: src.latest("top") is not None)
-        time.sleep(1.2)
-        assert low <= src.rate() <= high
+        assert_rate_settles(src.rate, low, high)
     assert mock.calls_to("subscribeCameras")[0][-1] == fps
 
 

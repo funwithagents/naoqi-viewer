@@ -2,6 +2,7 @@
 code:
   - tests/conftest.py
   - tests/mock_naoqi.py
+  - tests/rates.py
   - tests-e2e/conftest.py
   - tests-e2e/support.py
 tests:
@@ -66,6 +67,7 @@ A windowed viewer process (a MuJoCo window, OpenGL, a subprocess) only runs in t
 The fast tier runs on the three platforms naoqi-viewer installs on: Linux x86_64, macOS arm64 and Windows x64 ([project.md](project.md)), each in CI ([ci.md](ci.md)). The tests are the same everywhere; a few skip where what they test doesn't exist:
 
 - **Without offscreen OpenGL** (GitHub's macOS runners), the real headless viewer and the in-process renderer tests skip, as above.
+- **Polling rates** are asserted with `assert_rate_settles` (`tests/rates.py`): `rate()` must reach the target's floor within 5 s and never exceed its ceiling. The polling loops skip the slots a late tick missed rather than catch up, so on a runner whose timers run late (GitHub's macOS runner) one second can fall below the floor; a single reading after a fixed sleep failed there for the machine, not the code. The ceiling stays strict, since no slowness makes a fixed schedule poll faster.
 - **On Windows**:
   - the two tests of CI's pseudo-terminal driver (`scripts/ci_fetch_meshes.py`) skip: it runs on the standard library's `pty`, which Windows lacks, and CI runs it on Linux;
   - the test that a headless viewer process loads no window stack skips: MuJoCo's only Windows backend is GLFW itself, rendering into a hidden window.
