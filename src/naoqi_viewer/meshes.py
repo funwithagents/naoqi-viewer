@@ -171,7 +171,7 @@ def _notice(release: str) -> str:
         f"  {archive_url(release)}\n"
         "They are Aldebaran's work, licensed under Creative Commons\n"
         "Attribution-NonCommercial-NoDerivatives 4.0 (CC BY-NC-ND 4.0): NON-COMMERCIAL use only.\n"
-        "naoqi-viewer's MIT license does not cover them. The license text follows.\n"
+        "naoqi-viewer's Apache-2.0 license does not cover them. The license text follows.\n"
     )
 
 
