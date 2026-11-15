@@ -17,7 +17,7 @@ tests:
 
 ## Purpose
 
-This spec covers how each user gets Aldebaran's NAO meshes in a way the license allows, and how the viewer loads them in place of the placeholder visuals ([model.md](model.md)). The meshes are CC BY-NC-ND 4.0, not MIT. Aldebaran allows redistribution only where the user explicitly types or clicks "yes". So nothing from the meshes may enter this repository, a package or an image. Without them, naoqi-viewer works fully with its placeholder visuals.
+This spec covers how each user gets Aldebaran's NAO meshes in a way the license allows, and how the viewer loads them in place of the placeholder visuals ([model.md](model.md)). The meshes are CC BY-NC-ND 4.0, not Apache-2.0. Aldebaran allows redistribution only where the user explicitly types or clicks "yes". So nothing from the meshes may enter this repository, a package or an image. Without them, naoqi-viewer works fully with its placeholder visuals.
 
 The meshes come from [funwithagents/naoqi-meshes](https://github.com/funwithagents/naoqi-meshes). That repository runs Aldebaran's installer once, converts the meshes to OBJ with PNG textures, and publishes them as an encrypted release archive. naoqi-viewer downloads that archive and unlocks it only after the user types `yes`. naoqi-viewer needs no Collada converter, no Docker and no Linux binary, so `fetch-meshes` works the same on macOS and Linux.
 
@@ -45,7 +45,7 @@ Releases are immutable. naoqi-viewer pins one tag and its archive's SHA-256 (`me
 ### `naoqi-viewer fetch-meshes [--archive PATH] [--force]`
 
 1. **Already installed**: if `installed()` finds a complete install of the pinned release, the command says so, prints the path and exits 0 without prompting. `--force` removes that install and runs every step again.
-2. **Notice**: the command says what it downloads and from where, that the meshes are Aldebaran's work under CC BY-NC-ND 4.0, that they are **non-commercial**, and that naoqi-viewer's MIT license does not cover them.
+2. **Notice**: the command says what it downloads and from where, that the meshes are Aldebaran's work under CC BY-NC-ND 4.0, that they are **non-commercial**, and that naoqi-viewer's Apache-2.0 license does not cover them.
 3. **License text**: the release's `LICENSE`, downloaded and checked against its SHA-256, then printed in full. On a mismatch the command stops.
 4. **Acceptance**: the user must type `yes` in full. No default, no `y`, no flag, no environment variable. Anything else aborts before the archive is downloaded, including EOF or a stdin that is not a terminal. Automation, CI included, goes through a pseudo-terminal that types the answer, like a person would (see Testing).
 5. **Download**: the pinned release's archive, checked against `ARCHIVE_SHA256` and refused on mismatch. `--archive PATH` uses a local copy with the same check.

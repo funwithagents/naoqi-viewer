@@ -14,7 +14,7 @@ tests:
 
 ## Purpose
 
-The NAO as a MuJoCo model, and the one place that turns a NAOqi pose into MuJoCo state. Every other part of naoqi-viewer (the viewer, check-model) loads the robot and poses it through this module. The committed model draws the robot with styled placeholder shapes of our own, so it ships under MIT. When the user has installed Aldebaran's meshes ([meshes.md](meshes.md)), the same model is loaded with those meshes in place of the placeholder shapes.
+The NAO as a MuJoCo model, and the one place that turns a NAOqi pose into MuJoCo state. Every other part of naoqi-viewer (the viewer, check-model) loads the robot and poses it through this module. The committed model draws the robot with styled placeholder shapes of our own, so it ships under Apache-2.0. When the user has installed Aldebaran's meshes ([meshes.md](meshes.md)), the same model is loaded with those meshes in place of the placeholder shapes.
 
 ## Decided
 
@@ -44,7 +44,7 @@ The NAO as a MuJoCo model, and the one place that turns a NAOqi pose into MuJoCo
 
 ### Placeholder visuals
 
-The default look of the robot: styled MuJoCo primitives that read as a NAO, authored by us under MIT. They are written directly in `nao.xml`, with no mesh files.
+The default look of the robot: styled MuJoCo primitives that read as a NAO, authored by us under Apache-2.0. They are written directly in `nao.xml`, with no mesh files.
 
 - **Shapes**, sized from the URDF link lengths and NAO's general proportions:
   - head: an ellipsoid shell, two dark eye discs, ear discs on the sides;
@@ -54,7 +54,7 @@ The default look of the robot: styled MuJoCo primitives that read as a NAO, auth
   - feet: flattened rounded boxes.
 - **Colors**: named materials `nao_white` (main shell), `nao_grey` (joints and limbs), `nao_accent` (ear discs, one accent color), `nao_eye` (dark eyes).
 - **Class**: every placeholder visual geom is in the default class `nao_visual`. That is how [meshes.md](meshes.md) finds and removes them when Aldebaran's meshes are loaded instead.
-- **Never derived from Aldebaran's meshes**: no tracing, decimating or fitting shapes to the mesh files. The meshes are CC BY-NC-ND (no derivatives), and the placeholders must stay our own MIT work.
+- **Never derived from Aldebaran's meshes**: no tracing, decimating or fitting shapes to the mesh files. The meshes are CC BY-NC-ND (no derivatives), and the placeholders must stay our own Apache-2.0 work.
 
 ### Visuals: `placeholder` and `aldebaran`
 
