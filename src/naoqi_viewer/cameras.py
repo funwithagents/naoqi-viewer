@@ -32,9 +32,12 @@ CAMERA_NAMES: tuple[Camera, ...] = (
     "bottom",
 )  # the order of the pictures, top first
 DISPLAY_RESOLUTION = 1  # kQVGA, 320x240
-DISPLAY_COLORSPACE = 11  # kRGBColorSpace
+# kYUV422ColorSpace: the cameras' own, 2 bytes a pixel against RGB's 3, and no conversion on the
+# robot; decode_images converts to RGB (specs/cameras.md "Colorspace").
+DISPLAY_COLORSPACE = 9
 DISPLAY_FPS = 10
 SUBSCRIBER_NAME = "naoqi_viewer"
+INSTANCES_PER_NAME = 7  # the suffixes NAOqi gives one name, _0 to _6, at most
 IMAGE_STALE_AFTER = 1.0  # s: ten frame periods at the display rate
 UNSUBSCRIBE_TIMEOUT = (
     1.0  # s: how long close() gives NAOqi to acknowledge the unsubscribe
@@ -86,9 +89,9 @@ def decode_images(
     """The images in a `getImagesRemote` reply, by camera.
 
     Each image NAOqi returns is a list: width, height, layers, colorspace, timestamp seconds and
-    microseconds, the pixel bytes, the camera index, then the field-of-view angles. An entry with
-    no bytes, or a byte count that isn't width x height x 3, or an unknown camera, is skipped:
-    that is NAOqi's answer for a camera with nothing to serve.
+    microseconds, the pixel bytes (YUV422, as the source subscribes), the camera index, then the
+    field-of-view angles. An entry with no bytes, or a byte count that isn't width x height x 2,
+    or an unknown camera, is skipped: that is NAOqi's answer for a camera with nothing to serve.
     """
     images: dict[Camera, CameraImage] = {}
     if not isinstance(reply, list | tuple):
@@ -103,19 +106,49 @@ def decode_images(
         if not (isinstance(width, int) and isinstance(height, int)):
             continue
         pixels = np.frombuffer(data, dtype=np.uint8)
-        if pixels.size != width * height * 3 or pixels.size == 0:
+        if pixels.size != width * height * 2 or pixels.size == 0 or width % 2:
             continue
         naoqi_time = None
         if isinstance(seconds, int | float) and isinstance(micros, int | float):
             naoqi_time = float(seconds) + float(micros) / 1e6
         images[camera] = CameraImage(
             camera,
-            pixels.reshape(height, width, 3).copy(),
+            yuv422_to_rgb(pixels, width, height),
             seq,
             received_at,
             naoqi_time,
         )
     return images
+
+
+def yuv422_to_rgb(pixels: np.ndarray, width: int, height: int) -> np.ndarray:
+    """A YUV422 image (`Y0 U Y1 V` for each pair of pixels, row-major, `width x height x 2`
+    bytes) as a `(height, width, 3)` uint8 RGB array, contiguous and owning its data.
+
+    BT.601 at limited range (Y from 16 to 235): NAOqi's own conversion, so the picture is the
+    one an RGB subscription would have shown (to a level, on naoqi-sim)."""
+    pairs = pixels.reshape(height, width // 2, 4)
+    luma = (pairs[..., 0::2].reshape(height, width).astype(np.float32) - 16) * 1.164
+    u = np.repeat(pairs[..., 1], 2, axis=1).astype(np.float32) - 128
+    v = np.repeat(pairs[..., 3], 2, axis=1).astype(np.float32) - 128
+    rgb = np.empty((height, width, 3), np.float32)
+    rgb[..., 0] = luma + 1.596 * v
+    rgb[..., 1] = luma - 0.392 * u - 0.813 * v
+    rgb[..., 2] = luma + 2.017 * u
+    return np.clip(np.rint(rgb), 0, 255).astype(np.uint8)
+
+
+def _clear_instances(video: Any) -> None:
+    """Unsubscribe every instance of SUBSCRIBER_NAME: `unsubscribeAllInstances` on NAOqi 2.1,
+    each suffix in turn on 2.8, whose ALVideoDevice has no such method (an unknown name answers
+    False there, not an error)."""
+    try:
+        clear_all = video.unsubscribeAllInstances
+    except AttributeError:
+        for n in range(INSTANCES_PER_NAME):
+            video.unsubscribe(f"{SUBSCRIBER_NAME}_{n}")
+    else:
+        clear_all(SUBSCRIBER_NAME)
 
 
 class CameraSource:
@@ -196,7 +229,7 @@ class CameraSource:
         if not self._cleared:
             # What a crashed viewer left behind. Once only: a second viewer on the same NAOqi
             # clears ours when it starts, and we subscribe again without clearing its.
-            video.unsubscribeAllInstances(SUBSCRIBER_NAME)
+            _clear_instances(video)
             self._cleared = True
         elif self._name is not None:
             # Our previous subscription, if NAOqi still has it after an outage of ours.
@@ -213,7 +246,7 @@ class CameraSource:
             )
         )
         _log.info(
-            "subscribed to the cameras of %s as %s (QVGA, RGB, %d fps)",
+            "subscribed to the cameras of %s as %s (QVGA, YUV422, %d fps)",
             self._url,
             self._name,
             self._fps,

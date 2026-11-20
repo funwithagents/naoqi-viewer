@@ -17,8 +17,27 @@ from naoqi_viewer.model import JOINT_NAMES, NaoPose, PoseWriter, load_world
 
 Target = Literal["virtual", "naoqi-sim", "real"]
 
+
+def rgb_to_yuv422(image: np.ndarray) -> bytes:
+    """An RGB uint8 image (even width) as a camera's YUV422 bytes: BT.601 at limited range,
+    each pixel its own luma, each pair of pixels the mean of its two colours."""
+    rgb = image.astype(np.float64)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    y = 16 + (65.738 * r + 129.057 * g + 25.064 * b) / 256
+    u = 128 + (-37.945 * r - 74.494 * g + 112.439 * b) / 256
+    v = 128 + (112.439 * r - 94.154 * g - 18.285 * b) / 256
+    height, width = y.shape
+    pairs = np.empty((height, width // 2, 4))
+    pairs[..., 0], pairs[..., 2] = y[:, 0::2], y[:, 1::2]
+    pairs[..., 1] = (u[:, 0::2] + u[:, 1::2]) / 2
+    pairs[..., 3] = (v[:, 0::2] + v[:, 1::2]) / 2
+    return np.clip(np.rint(pairs), 0, 255).astype(np.uint8).tobytes()
+
+
 FRAME_TORSO = 0
 FRAME_WORLD = 1
+RGB = 11  # ALVideoDevice's kRGBColorSpace
+YUV422 = 9  # kYUV422ColorSpace: Y0 U Y1 V for each pair of pixels
 EFFECTORS = ("Head", "LArm", "RArm", "LLeg", "RLeg")
 
 # Torso upright, standing on the floor (the model's standing height).
@@ -125,11 +144,16 @@ class _VideoDevice:
     def unsubscribe(self, name: str) -> bool:
         return self._mock._call("ALVideoDevice", "unsubscribe", name)
 
-    def unsubscribeAllInstances(self, name: str) -> bool:
-        return self._mock._call("ALVideoDevice", "unsubscribeAllInstances", name)
-
     def getSubscribers(self) -> list[str]:
         return self._mock._call("ALVideoDevice", "getSubscribers")
+
+
+class _VideoDevice21(_VideoDevice):
+    """NAOqi 2.1's ALVideoDevice, which also clears every instance of a name at once; 2.8's
+    has no such method (measured on naoqi-sim 2.8.7.4)."""
+
+    def unsubscribeAllInstances(self, name: str) -> bool:
+        return self._mock._call("ALVideoDevice", "unsubscribeAllInstances", name)
 
 
 class _PeoplePerception:
@@ -187,6 +211,7 @@ class MockNaoqi:
         self._subscriptions: dict[
             str, list[int]
         ] = {}  # subscription name -> camera indexes
+        self._colorspaces: dict[str, list[int]] = {}  # subscription name -> per camera
         self._images: dict[int, np.ndarray] = {}  # camera index -> RGB image
         self.people_perception = people_perception  # serve ALPeoplePerception
         # ALPeoplePerception subscription name -> [period, precision]
@@ -209,7 +234,12 @@ class MockNaoqi:
         )
         session.registerService("ALMotion", _Motion(self))
         session.registerService("ALMemory", _Memory(self))
-        session.registerService("ALVideoDevice", _VideoDevice(self))
+        video = (
+            _VideoDevice(self)
+            if self.version.startswith("2.8")
+            else _VideoDevice21(self)
+        )
+        session.registerService("ALVideoDevice", video)
         if self.people_perception:
             session.registerService("ALPeoplePerception", _PeoplePerception(self))
         if self.target == "naoqi-sim":
@@ -270,7 +300,9 @@ class MockNaoqi:
 
     def set_image(self, camera: str, image: np.ndarray | None) -> None:
         """What `getImagesRemote` serves for `camera` ("top" or "bottom"): an RGB uint8 image,
-        or None for a camera with nothing to serve (as a NAOqi without that camera)."""
+        or None for a camera with nothing to serve (as a NAOqi without that camera). It is served
+        in the colorspace each subscription asked for: RGB as is, YUV422 encoded as a camera
+        would (`rgb_to_yuv422`)."""
         index = {"top": 0, "bottom": 1}[camera]
         with self._lock:
             if image is None:
@@ -391,6 +423,7 @@ class MockNaoqi:
             candidate = f"{name}_{n}"
             if candidate not in self._subscriptions:
                 self._subscriptions[candidate] = [int(i) for i in indexes]
+                self._colorspaces[candidate] = [int(c) for c in colorspaces]
                 return candidate
         raise RuntimeError(
             f"ALVideoDevice.subscribeCameras: too many instances of {name!r}"
@@ -402,21 +435,29 @@ class MockNaoqi:
         now = time.time()
         seconds, micros = int(now), int((now - int(now)) * 1e6)
         reply: list[Any] = []
-        for index in self._subscriptions[name]:
+        colorspaces = self._colorspaces.get(name, [])
+        for slot, index in enumerate(self._subscriptions[name]):
+            colorspace = colorspaces[slot] if slot < len(colorspaces) else RGB
             image = self._images.get(index)
             if image is None:  # a camera with nothing to serve: no size, no bytes
-                reply.append([0, 0, 0, 11, 0, 0, b"", index, 0.0, 0.0, 0.0, 0.0])
+                reply.append(
+                    [0, 0, 0, colorspace, 0, 0, b"", index, 0.0, 0.0, 0.0, 0.0]
+                )
                 continue
             height, width = image.shape[:2]
+            if colorspace == YUV422:
+                layers, data = 2, rgb_to_yuv422(image)
+            else:
+                layers, data = 3, image.tobytes()
             reply.append(
                 [
                     width,
                     height,
-                    3,
-                    11,
+                    layers,
+                    colorspace,
                     seconds,
                     micros,
-                    image.tobytes(),
+                    data,
                     index,
                     0.0,
                     0.0,
