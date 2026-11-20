@@ -5,7 +5,7 @@ from contextlib import closing
 
 import numpy as np
 import pytest
-from mock_naoqi import MockNaoqi
+from mock_naoqi import MockNaoqi, rgb_to_yuv422
 from rates import assert_rate_settles
 
 from naoqi_viewer import cameras
@@ -22,6 +22,7 @@ from naoqi_viewer.cameras import (
     picture_rects,
     placeholder,
     resample_nearest,
+    yuv422_to_rgb,
 )
 from naoqi_viewer.source import connect
 
@@ -34,6 +35,12 @@ def wait_until(condition: Callable[[], bool], timeout: float = 5.0) -> None:
         if time.monotonic() > deadline:
             raise AssertionError("condition not met in time")
         time.sleep(0.01)
+
+
+def near(pixel: np.ndarray, expected: list[int], levels: int = 2) -> bool:
+    """`pixel` within `levels` of `expected` on every channel: the images travel as YUV422,
+    whose round trip moves a value by a level or two (a pair of pixels shares its colour)."""
+    return bool(np.abs(pixel.astype(int) - np.array(expected)).max() <= levels)
 
 
 def gradient(blue: int, size: tuple[int, int] = QVGA) -> np.ndarray:
@@ -69,12 +76,8 @@ def test_subscribes_both_cameras_and_decodes_their_images(
         wait_until(lambda: both_arrived(src))
         top, bottom = latest(src, "top"), latest(src, "bottom")
         assert top.image.shape == (240, 320, 3) and top.image.dtype == np.uint8
-        assert top.image[5, 9].tolist() == [
-            5,
-            9,
-            1,
-        ]  # row 0 is the top row, not flipped
-        assert bottom.image[200, 300].tolist() == [200, 300 % 256, 2]
+        assert near(top.image[5, 9], [5, 9, 1])  # row 0 is the top row, not flipped
+        assert near(bottom.image[200, 300], [200, 300 % 256, 2])
         assert top.camera == "top" and bottom.camera == "bottom"
         assert top.seq == bottom.seq >= 1  # one poll, both images
         assert top.naoqi_time is not None and abs(top.naoqi_time - time.time()) < 5
@@ -101,7 +104,7 @@ def test_images_follow_the_robot(mock_naoqi: tuple[str, MockNaoqi]):
         wait_until(lambda: src.latest("top") is not None)
         first = latest(src, "top")
         mock.set_image("top", gradient(9))
-        wait_until(lambda: latest(src, "top").image[0, 0, 2] == 9)
+        wait_until(lambda: latest(src, "top").image[0, 0, 2] in (8, 9, 10))
         assert latest(src, "top").seq > first.seq
 
 
@@ -129,7 +132,7 @@ def test_a_camera_with_nothing_to_serve_has_no_image(
 
         mock.set_image("bottom", gradient(2))
         wait_until(lambda: src.latest("bottom") is not None)
-        assert latest(src, "bottom").image[0, 0, 2] == 2
+        assert latest(src, "bottom").image[0, 0, 2] in (1, 2, 3)
 
 
 def latest_seq(src: CameraSource) -> int:
@@ -172,6 +175,32 @@ def test_startup_clears_what_a_crashed_viewer_left_but_not_other_names(
     assert mock.subscribers() == ["someone_else_0"]
 
 
+def test_on_naoqi_2_8_startup_clears_each_instance_of_its_name():
+    # 2.8's ALVideoDevice has no unsubscribeAllInstances: the source clears its name's
+    # instances one by one, and leaves other names alone.
+    mock = MockNaoqi(version="2.8.7.4").start()
+    try:
+        session = connect(mock.url)
+        try:
+            video = session.service("ALVideoDevice")
+            for _ in range(2):  # two crashed viewers' leftovers
+                video.subscribeCameras(SUBSCRIBER_NAME, [0, 1], [1, 1], [9, 9], 10)
+            video.subscribeCameras("someone_else", [0], [1], [9], 5)
+        finally:
+            session.close()
+        mock.set_image("top", gradient(3))
+        with closing(CameraSource(mock.url)) as src:
+            wait_until(lambda: src.latest("top") is not None)
+            assert sorted(mock.subscribers()) == [
+                f"{SUBSCRIBER_NAME}_0",
+                "someone_else_0",
+            ]
+            assert mock.calls_to("unsubscribeAllInstances") == []
+        assert mock.subscribers() == ["someone_else_0"]
+    finally:
+        mock.close()
+
+
 def test_failing_calls_keep_the_last_image_then_recover_without_clearing_again(
     mock_naoqi: tuple[str, MockNaoqi],
 ):
@@ -189,7 +218,7 @@ def test_failing_calls_keep_the_last_image_then_recover_without_clearing_again(
         mock.fail_calls(None)
         mock.set_image("top", gradient(5))
         wait_until(lambda: latest(src, "top").seq > stalled.seq, timeout=10)
-        assert latest(src, "top").image[0, 0, 2] == 5
+        assert latest(src, "top").image[0, 0, 2] in (4, 5, 6)
         assert mock.calls_to("unsubscribeAllInstances") == [(SUBSCRIBER_NAME,)]
         assert mock.subscribers() == [f"{SUBSCRIBER_NAME}_0"]  # the old one was removed
 
@@ -206,7 +235,7 @@ def test_subscribes_again_after_naoqi_restarts(mock_naoqi: tuple[str, MockNaoqi]
 
         mock.restart()
         mock.set_image("top", gradient(7))
-        wait_until(lambda: latest(src, "top").image[0, 0, 2] == 7, timeout=10)
+        wait_until(lambda: latest(src, "top").image[0, 0, 2] in (6, 7, 8), timeout=10)
         assert mock.subscribers() == [f"{SUBSCRIBER_NAME}_0"]
         assert len(mock.calls_to("unsubscribeAllInstances")) == 1
 
@@ -276,9 +305,10 @@ def test_the_source_only_subscribes_polls_and_unsubscribes(
 
 
 def naoqi_entry(image: np.ndarray, index: int, data: object = None) -> list[object]:
+    """An image as NAOqi returns it to a YUV422 subscription."""
     height, width = image.shape[:2]
-    pixels = image.tobytes() if data is None else data
-    return [width, height, 3, 11, 1700000000, 250000, pixels, index, 0.0, 0.0, 0.0, 0.0]
+    pixels = rgb_to_yuv422(image) if data is None else data
+    return [width, height, 2, 9, 1700000000, 250000, pixels, index, 0.0, 0.0, 0.0, 0.0]
 
 
 def test_decode_images_reads_naoqi_layout_and_skips_what_is_not_an_image():
@@ -286,29 +316,44 @@ def test_decode_images_reads_naoqi_layout_and_skips_what_is_not_an_image():
     reply = [
         naoqi_entry(top, 0),
         tuple(
-            naoqi_entry(bottom, 1, bytearray(bottom.tobytes()))
+            naoqi_entry(bottom, 1, bytearray(rgb_to_yuv422(bottom)))
         ),  # a raw buffer arrives so
     ]
     images = decode_images(reply, received_at=12.5, seq=7)
     assert set(images) == {"top", "bottom"}
-    np.testing.assert_array_equal(images["top"].image, top)
-    np.testing.assert_array_equal(images["bottom"].image, bottom)
+    assert images["top"].image.shape == top.shape
+    assert np.abs(images["top"].image.astype(int) - top).max() <= 2
+    assert np.abs(images["bottom"].image.astype(int) - bottom).max() <= 2
     assert images["top"].naoqi_time == pytest.approx(1700000000.25)
     assert (images["bottom"].seq, images["bottom"].received_at) == (7, 12.5)
     assert (
         images["top"].image.flags["C_CONTIGUOUS"] and images["top"].image.base is None
     )
 
-    empty = [0, 0, 0, 11, 0, 0, b"", 1, 0.0, 0.0, 0.0, 0.0]  # nothing to serve
-    short = naoqi_entry(top, 0, top.tobytes()[:-1])  # a byte count off
+    empty = [0, 0, 0, 9, 0, 0, b"", 1, 0.0, 0.0, 0.0, 0.0]  # nothing to serve
+    short = naoqi_entry(top, 0, rgb_to_yuv422(top)[:-1])  # a byte count off
+    rgb = naoqi_entry(top, 0, top.tobytes())  # 3 bytes a pixel: not what was asked for
     unknown = naoqi_entry(top, 3)  # not a head camera
-    text = naoqi_entry(top, 0, "x" * top.size)  # a string, not a buffer
+    text = naoqi_entry(top, 0, "x" * (top.size // 3 * 2))  # a string, not a buffer
     assert (
-        decode_images([empty, short, unknown, text, [], None], received_at=0, seq=1)
+        decode_images(
+            [empty, short, rgb, unknown, text, [], None], received_at=0, seq=1
+        )
         == {}
     )
     assert decode_images(None, received_at=0, seq=1) == {}
     assert decode_images([], received_at=0, seq=1) == {}
+
+
+def test_yuv422_decodes_to_the_rgb_naoqi_would_serve():
+    # BT.601 at limited range, NAOqi's own: Y 16 black, Y 235 white, (81, 90, 240) pure red;
+    # each pixel keeps its own luma and shares its pair's colour.
+    pixels = np.frombuffer(bytes([16, 128, 235, 128, 81, 90, 81, 240]), np.uint8)
+    rgb = yuv422_to_rgb(pixels, 2, 2)
+    assert rgb.shape == (2, 2, 3) and rgb.flags["C_CONTIGUOUS"]
+    assert rgb[0].tolist() == [[0, 0, 0], [255, 255, 255]]
+    assert rgb[1, 0, 0] >= 250 and rgb[1, 0, 1:].tolist() == [0, 0]
+    assert rgb[1, 1].tolist() == rgb[1, 0].tolist()
 
 
 # --- The pictures (pure) ----------------------------------------------------------------
